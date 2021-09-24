@@ -18,3 +18,5 @@ def simplify(text):
 
 if simplify(text)==simplify(textrev):
     print(text, "is a palindrome.")
+
+    ## ACS - Well done
