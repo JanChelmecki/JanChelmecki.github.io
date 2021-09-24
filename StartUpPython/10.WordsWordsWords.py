@@ -4,3 +4,5 @@ for char in sentence:
     if char==" ":
         words+=1
 print("There are", words, "words.")
+
+## ACS Good

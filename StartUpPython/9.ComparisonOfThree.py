@@ -10,3 +10,5 @@ def maximum(L):
     return m
 
 print("Maximum is", maximum([x,y,z]))
+
+## Very good
