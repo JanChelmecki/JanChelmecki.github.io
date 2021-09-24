@@ -12,7 +12,7 @@ for n in range(1,len(Letters)):
     making potentialy (if there are no duplicates) n+1 new words
     out of each of the words in Anagrams. 
     
-    Anagrams being set provides that there are no duplicates in any stage of the construction,
+    Anagrams being a set provides that there are no duplicates in any stage of the construction,
     greatly reducing the number of new words to add letters to (which normaly grows as n!)
     """
     Anagrams = {word[:i:]+Letters[n]+word[i::] for i in range(n+1) for word in Anagrams}
