@@ -1,13 +1,12 @@
 import pygame
 
-#--GlobalConstants
+#globalConstants
 
-#--Colours
+#colours
 BLACK=(0,0,0)
 WHITE=(255,255,255)
 BLUE=(50,50,255)
 YELLOW=(255,255,0)
-PINK=(255,100,150)
 
 #Initialize PyGame
 pygame.init()
