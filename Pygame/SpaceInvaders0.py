@@ -1,6 +1,12 @@
 import pygame, random
 from pygame.constants import KEYDOWN, KEYUP
 
+"""
+The first Space Invaders file. It was not creating in OOP.
+After trying to re-write it ussing purely OOP approach, I decided it's
+easier to start over in a new file (SpaceInvaders.py) and plan my code.
+"""
+
 class Invader(pygame.sprite.Sprite):
     def __init__(self, color, width, height, speed):
 
