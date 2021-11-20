@@ -19,8 +19,8 @@ ball_width = 20
 x = random.randint(150, 490) #ball coordinates
 y = random.randint(200, 280)
 
-k = 3 #indicates how fast the game gets harder (see delta_v() function). The bigger k is, the slower the difficulty increses.
-sensitivity = 7 #indicates how fast the paddle is moved
+k = 1 #indicates how fast the game gets harder (see delta_v() function). The bigger k is, the slower the difficulty increses.
+sensitivity = 7 #indicates how fast the paddle moves
 
 v_x = random.randint(2,4)
 v_y = random.randint(2,4)*random.choice([-1, 1])
