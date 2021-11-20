@@ -5,6 +5,10 @@ from pygame.constants import KEYDOWN, KEYUP
 The first Space Invaders file. It was not creating in OOP.
 After trying to re-write it ussing purely OOP approach, I decided it's
 easier to start over in a new file (SpaceInvaders.py) and plan my code.
+
+This code was left during re-design and that's why 
+
+IT DOES NOT WORK
 """
 
 class Invader(pygame.sprite.Sprite):
