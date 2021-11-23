@@ -80,5 +80,8 @@ def test(length, trials):
         print("Test OK")
 
 
-L = [5,4,3,2,1]
-time = timeit.timeit(setup = "from __main__ import merge_sort, merge_lists", stmt = "merge_sort(L)", number = 10, globals = {"L":"L"})
+L = [random.randint(0,10**6) for i in range(10**6)]
+print(L[0])
+
+time_m = timeit.timeit(setup = "from __main__ import merge_sort, merge_lists", stmt = "merge_sort(L)", number = 10, globals = {"L":"L"})
+print(time_m)
