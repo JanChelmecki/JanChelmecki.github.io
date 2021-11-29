@@ -1,7 +1,7 @@
-import pygame, random
+import pygame, random, math
 from pygame.constants import K_SPACE
 
-level = 10
+level = 7
 
 #settings
 turning = 100 #the lower the number, the faster invaders turn
@@ -11,6 +11,11 @@ sensitivity = 3 #how fast players move
 
 bullets_per_player = 25
 bullets_won_per_invader_hit = 3
+
+
+radius = 50
+#we store the parametrization of the circle so that we don't have to compute sin and cos every time we need them
+circle = [(round(radius*math.cos(i/100)), round(radius*math.sin(i/100))) for i in range(628)]
 
 #region Other global constants
 size=(640,480)
@@ -22,6 +27,7 @@ BLUE=(50,50,255)
 RED=(255,50,50)
 YELLOW=(255,255,0)
 GREEN = (50, 255, 50)
+PINK = (255, 255, 100)
 #endregion
 
 class Game():
@@ -30,26 +36,35 @@ class Game():
         super().__init__()
 
         self.level = level
-
+        
+        #region level settings
         self.progress = 0
+        self.recreate_invaders = False
         if level<=3:
             self.progress_per_hit = 20
-            self.recreate_invaders = False
-            invaders = 8+2*level
+            invaders = 5*level
             hunting_invaders = 0
+            invader_queens = 0
             if level == 3:
-                hunting_invaders = 1
-        elif 3<level<10:
+                hunting_invaders = 3
+        elif 3<level<6:
             self.progress_per_hit = 10
-            self.recreate_invaders = True
+            
             invaders = 15
-            hunting_invaders = 7
+            hunting_invaders = 2*(level-1)
+            invader_queens = 0
+            self.recreate_invaders = True
+        elif level == 6:
+            invaders = 0
+            hunting_invaders = 0
+            invader_queens = 1
         else:
             self.progress_per_hit = 5
-            self.recreate_invaders = False#True
+            self.recreate_invaders = True
             invaders = 15
-            hunting_invaders = 10
-
+            hunting_invaders = 8
+            invader_queens = 2
+        #endregion
         self.screen = pygame.display.set_mode(size)
         self.clock = pygame.time.Clock()
         pygame.display.set_caption("SpaceInvaders")
@@ -72,10 +87,22 @@ class Game():
             self.all_sprites_group.add(invader)
 
         #Hunting Invaders
+        self.hunting_invader_group = pygame.sprite.Group()
         for i in range(hunting_invaders):
             hunting_invader = HuntingInvader(GREEN, 10, 10)
+            self.hunting_invader_group.add(hunting_invader)
             self.invader_group.add(hunting_invader)
             self.all_sprites_group.add(hunting_invader)
+
+        #Invader Queens
+        self.queen_group = pygame.sprite.Group()
+        for i in range(invader_queens):
+            queen = InvaderQueen(YELLOW, 10, 10)
+            self.queen_group.add(queen)
+            self.all_sprites_group.add(queen)
+            for minion in queen.get_minions():
+                self.invader_group.add(minion)
+                self.all_sprites_group.add(minion)
 
         #Bullets
         self.bullet_group = pygame.sprite.Group()
@@ -119,11 +146,14 @@ class Game():
             self.player.reward()
             if self.recreate_invaders:
                 self.new_invader()
-            self.progress += self.progress_per_hit
+                if type(invader)==InvaderMinion:
+                    self.kill_minion(invader)
 
         player_hit_group = pygame.sprite.spritecollide(self.player, self.invader_group, True)
         for invader in player_hit_group:
             self.player.lose_a_life()
+            if type(invader)==InvaderMinion:
+                self.kill_minion(invader)
 
         self.all_sprites_group.update()
 
@@ -133,9 +163,9 @@ class Game():
     
     def scoreboard(self):
         self.screen.blit(myfont.render("Lives: "+str(self.player.get_lives()), 1, WHITE), (10, 5))
-        self.screen.blit(myfont.render("Bullets: "+str(self.player.get_bullets()), 1, WHITE), (10, 55))
+        self.screen.blit(myfont.render("Bullets: "+str(self.player.get_bullets()), 1, WHITE), (10, 30))
         self.screen.blit(myfont.render("Level: "+str(self.level), 1, YELLOW), (550, 5))
-        self.screen.blit(myfont.render("Level progress: "+str(self.progress)+"%", 1, WHITE), (10, 30))
+        #self.screen.blit(myfont.render("Level progress: "+str(self.progress)+"%", 1, WHITE), (10, 30))
 
     def update_screen(self):
         self.screen.fill(BLACK)
@@ -144,10 +174,15 @@ class Game():
         pygame.display.flip()
 
     def nextlevel(self): #when to end level
-        return self.progress == 100
+        if self.level<3:
+            return len(self.invader_group) <= 5*(self.level)-3
+        elif 3<=self.level<6:
+            return len(self.hunting_invader_group) == 0
+        else:
+            return len(self.queen_group) == 0
 
     def new_bullet(self, x, y): #when somebody shoots at (x,y)
-        bullet = Bullet(WHITE, 2, 2, x, y)
+        bullet = Bullet(WHITE, 2, 10, x, y)
         self.all_sprites_group.add(bullet)
         self.bullet_group.add(bullet)
 
@@ -166,6 +201,11 @@ class Game():
             return x_diff//div+2
         else:
             return x_diff//div-1
+
+    def kill_minion(self, minion):
+        queen = minion.get_queen()
+        if queen.remove_minion(minion):
+            self.invader_group.add(queen)
 
 class Invader(pygame.sprite.Sprite):
 
@@ -254,8 +294,6 @@ class HuntingInvader(pygame.sprite.Sprite):
             else:
                 self.v_x = -self.v_x
 
-"""
-Under construction:
 class InvaderQueen(pygame.sprite.Sprite):
 
     def __init__(self, color, width, height):
@@ -266,62 +304,135 @@ class InvaderQueen(pygame.sprite.Sprite):
         self.image.fill(color)
 
         self.rect = self.image.get_rect() 
-        self.rect.x = random.randrange(0, 640-width) 
-        self.rect.y = random.randrange(-size[1]-height, -height)
+        self.rect.x = random.randrange(radius+width, 640-width-radius)
+        self.rect.y = random.randrange(-size[1]-height, -radius-height)
 
         self.width = width
         self.height = height
         self.v_x = 0
-        self.v_y = random.randint(2,3)
+        self.v_y = random.randint(4,5)
+
+        self.strike = False
+        self.float = False
+        self.turning = 50 #how often it turns when not hunting
+        self.default_height = random.randint(radius+width, radius + 5*width)
+
+        self.minions = []
+        for i in range(6):
+            self.minions.append(InvaderMinion(PINK, 10, 10, self, (628*i)//6) )
 
     def update(self):
-        #move horizontally
-        newposition = self.rect.x + self.v_x
-        if newposition >= 0 and newposition + self.width <= size[0]:
-            self.rect.x = newposition
-        else:
-            self.v_x = -self.v_x
-        
-        #move vertically
-        self.rect.y += self.v_y
-        if self.rect.y > size[0]+self.height:
-            self.rect.y = -self.height
+        if self.strike: #attacking
+            #move vertically
+            self.rect.y += self.v_y
+            #move horizontally, targeting the player
+            newposition = self.rect.x + g.target_player(self.rect.x, self.rect.y)
+            if newposition >= radius and newposition + self.width + radius <= size[0]:
+                self.rect.x = newposition
+            if self.rect.y>=size[1]+radius+self.width:
+                self.strike = False
+                self.float = True
+                for minion in self.minions:
+                    minion.set_angular_speed(2)
+        elif self.float:
+            self.rect.y -= 4
+            if self.rect.y<self.default_height:
+                self.float = False
+        else: #circling in the upper parts of the screen
+            #move horizontally
+            newposition = self.rect.x + self.v_x
+            if newposition >= radius and newposition + self.width + radius <= size[0]:
+                self.rect.x = newposition
+
+                rand = random.randint(0,self.turning) #change speed randomly
+                if rand == 0:
+                    self.v_x = 3*(-1)**random.randint(0,1)
+                    rand = random.randint(0, 5) #decide whether to hunt
+                    if rand ==0:
+                        self.strike = True
+                        self.float = False
+                        for minion in self.minions:
+                            minion.set_angular_speed(6)
+            else:
+                self.v_x = -self.v_x
+    
+    #region Set-Get
+    def get_x(self):
+        return self.rect.x
+
+    def get_y(self):
+        return self.rect.y
+
+    def get_v_x(self):
+        return self.v_x
+
+    def get_v_y(self):
+        return self.v_y
+
+    def get_minions(self):
+        return self.minions
+
+    def remove_minion(self, minion):
+        self.minions.remove(minion)
+        return self.minions == [] #returns True, if there are no minions left
+    #endregion
 
 class InvaderMinion(pygame.sprite.Sprite):
 
-    def __init__(self, color, width, height, queen):
+    def __init__(self, color, width, height, queen, phase):
 
         super().__init__()
          
         self.image = pygame.Surface([width,height])
         self.image.fill(color)
 
-        self.rect = self.image.get_rect() 
-        self.rect.x = random.randrange(0, 640-width) 
-        self.rect.y = random.randrange(-size[1]-height, -height)
+        self.rect = self.image.get_rect()
+        self.phase = phase
+        self.angular_speed = 2
+        self.queen = queen
+
+        self.rect.x = 0
+        self.rect.y = 0
 
         self.width = width
         self.height = height
-        self.v_x = (-1)**random.randint(0,1)
-        self.v_y = random.randint(2,3)
 
     def update(self):
-        #move horizontally
-        newposition = self.rect.x + self.v_x
-        if newposition >= 0 and newposition + self.width <= size[0]:
-            self.rect.x = newposition
-        else:
-            self.v_x = -self.v_x
-        
-        rand = random.randint(0,turning) #change speed randomly
-        if rand == 0:
-            self.v_x = random.randint(-1,1)
+        self.rect.x = self.queen.get_x() + circle[self.phase][0]
+        self.rect.y = self.queen.get_y() + circle[self.phase][1]
+        self.phase += self.angular_speed
+        if self.phase >= 627:
+            self.phase = 0
+        """
+        disp_x = self.rect.x - self.queen.get_x() #displacement from the queen
+        disp_y = self.rect.y - self.queen.get_y()
 
-        #move vertically
+        It is easy to check that a body who satisfies
+            x' = y
+            y' = -x
+        where x' and y' denote the vertical and horizontal components of the velocity vector,
+        circles around the origin. 
+        
+        However, the //20 and numerical errors make the motion unstable, causing the invader to move further and further away.
+
+        self.v_x = disp_y//10 + self.queen.get_v_x() #the second term accounts for queen's motion
+        self.v_y = -disp_x//10 + self.queen.get_v_y()
+
+        self.rect.x += self.v_x
         self.rect.y += self.v_y
-        if self.rect.y > size[0]+self.height:
-            self.rect.y = -self.height
-"""
+        """
+
+        #region Set-Get
+        def set_angular_speed(x):
+            self.angular_speed = x
+        #endregion
+
+    def set_angular_speed(self, x):
+        self.angular_speed = x
+
+    def get_queen(self):
+        return self.queen
+
 class Player(pygame.sprite.Sprite):
 
     def __init__(self, color, width, height):
@@ -421,7 +532,6 @@ class Bullet(pygame.sprite.Sprite):
 pygame.init()
 
 g = Game(level) #create a game
-
 done = False
 
 while not done:

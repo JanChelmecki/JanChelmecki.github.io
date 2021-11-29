@@ -59,6 +59,31 @@ def quick_sort(L):
         pivot = L[random.randint(0,len(L)-1)]
         return quick_sort([l for l in L if l<pivot]) + [pivot]*L.count(pivot) + quick_sort([l for l in L if l>pivot])
 
+def quick_sort_1(L):
+    if len(L)<=1:
+        return L
+    pivot = 0
+    left = 1
+    right = len(L)-1
+    while left<=right:
+        while L[left]<=L[pivot]:
+            left+=1
+        while L[pivot]>=L[pivot]:
+            right-=1
+        temp = L[left]
+        L[left] = L[right]
+        L[right] = temp
+        left+=1
+        right-=1
+        print("a")
+    temp = L[pivot]
+    L[pivot] = L[right]
+    L[right] = temp
+    return L
+
+print(quick_sort_1([34, 56, 23, 81, 28, 66, 35, 17, 88, 37, 18, 50]))
+
+
 
 def test(length, trials):
     """
@@ -79,9 +104,11 @@ def test(length, trials):
     if success:
         print("Test OK")
 
-
+"""
 L = [random.randint(0,10**6) for i in range(10**6)]
 print(L[0])
 
 time_m = timeit.timeit(setup = "from __main__ import merge_sort, merge_lists", stmt = "merge_sort(L)", number = 10, globals = {"L":"L"})
 print(time_m)
+
+"""
