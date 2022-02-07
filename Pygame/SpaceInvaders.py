@@ -59,11 +59,10 @@ class Game():
             hunting_invaders = 0
             invader_queens = 1
         else:
-            self.progress_per_hit = 5
-            self.recreate_invaders = True
-            invaders = 15
-            hunting_invaders = 8
-            invader_queens = 2
+            self.recreate_invaders = False
+            invaders = 0
+            hunting_invaders = 0
+            invader_queens = 5
         #endregion
         self.screen = pygame.display.set_mode(size)
         self.clock = pygame.time.Clock()

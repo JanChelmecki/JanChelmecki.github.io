@@ -40,23 +40,45 @@ class Player():
 
 class Board():
     def __init__(self) -> None:
-        self.snakes = {}
-        for i in range(1, 10):
-            start = 10*i+random.randint(1,9)
-            end = 10*random.randint(0, i-1) + random.randint(1,9)
-            self.snakes[start] = end
-
+        self.snakes = {} #dictionary, start:end
         self.ladders = {}
-        for i in range(9):
-            start = 10*i+random.randint(1,9)
-            end = 10*random.randint(i, 9) + random.randint(1,9)
-            self.ladders[start] = end
-
+        """
+        We do not want neither starts to overlap nor a start to be an end.
+        """
+        #create lists of potential starts - in this implementation, some of the values may not become parts of snakes/ladders
+        snakes_start = []
+        ladders_start = []
+        for i in range(9): #fill snakes_start randomly
+            snakes_start.append(random.randint(11,99))
+        for i in range(9): #fill ladders_start randomly, making sure the starts do not overlap with the snakes_start
+            tile = random.randint(1,89)
+            if tile not in snakes_start:
+                ladders_start.append(tile)
+        """
+        Even is some value start is reapeted in snakes_snakes start, it is not a problem 
+        - the snakes[start] value will be overwritten.
+        """
+        
+        #find ends which ARE NOT in either of the start list
+        for start in snakes_start:
+            end = random.randint(1, start-start%10) #random tile on a lower level
+            while (end in snakes_start or end in ladders_start) and end > 0:
+                end -= 1 #go backwards
+            if end>0: #if you did find an end, make an start:end pair
+                self.snakes[start] = end
+        
+        for start in ladders_start:
+            end = random.randint(start-start%10+11, 99) #random tile on a higher level
+            while (end in snakes_start or end in ladders_start) and end < 100:
+                end += 1 #go foreward
+            if end<100: 
+                self.ladders[start] = end
+        
     def move_player(self, pos): #move the player according to snakes-ladders pattern
         if pos in self.snakes:
             pos = self.snakes[pos]
             print("They're on a snake. They move to", pos)
-        if pos in self.ladders:
+        elif pos in self.ladders:
             pos = self.ladders[pos]
             print("They're on a ladder. They move to", pos)
         return pos

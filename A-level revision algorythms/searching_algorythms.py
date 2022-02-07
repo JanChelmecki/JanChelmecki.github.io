@@ -17,7 +17,6 @@ def binary_search(list, item):
 
     start = 0
     end = len(list)-1
-    midpoint = (start+end)//2
     found = False
 
     while not found and start<=end:

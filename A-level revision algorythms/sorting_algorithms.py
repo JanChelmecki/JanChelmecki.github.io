@@ -1,4 +1,4 @@
-import timeit, random
+import random
 
 def bauble_sort(L):
     route = 0
@@ -8,7 +8,7 @@ def bauble_sort(L):
         index = 0
         while index + route + 1 < len(L):
             nextindex = index + 1
-            if L[index] > L[nextindex]:
+            if L[index] > L[nextindex]: #swap, if in wrong order
                 temp = L[index]
                 L[index] = L[nextindex]
                 L[nextindex] = temp
@@ -21,24 +21,29 @@ def insertion_sort(L):
     for index in range(1, len(L)): #list is all sorted before index, we need to insert L[index] in the right place
         item = L[index]
         space = index - 1
-        while space>= 0 and L[space]>item:
-            L[space+1] = L[space]
+        while space>= 0 and L[space]>item: #keep going left until you find the right spot
+            L[space+1] = L[space] #shift the current element one space right
             space -= 1
         L[space+1] = item
     return L
 
 def merge_lists(L1, L2):
+    #merges two sorted lists into one sorted list
     index1 = 0
     index2 = 0
     L = []
     while index1 < len(L1) and index2 < len(L2):
+        """
+        Choose smaller from the first elements of the two lists and move up one space in
+        the list you chose item from. Do this until you run out of elements in a list.
+        """
         if L1[index1]<L2[index2]:
             L.append(L1[index1])
             index1 += 1
         else:
             L.append(L2[index2])
             index2 += 1
-    while index1 < len(L1):
+    while index1 < len(L1): #add what's left from L1
         L.append(L1[index1])
         index1 += 1
     while index2 < len(L2):
@@ -53,48 +58,50 @@ def merge_sort(L):
         return merge_lists(merge_sort(L[:len(L)//2:]), merge_sort(L[len(L)//2::]))
 
 def quick_sort(L):
-    if len(L) == 0 or len(L) == 1:
-        return L
-    else:
-        pivot = L[random.randint(0,len(L)-1)]
-        return quick_sort([l for l in L if l<pivot]) + [pivot]*L.count(pivot) + quick_sort([l for l in L if l>pivot])
-
-def quick_sort_1(L):
     if len(L)<=1:
         return L
-    pivot = 0
-    left = 1
-    right = len(L)-1
-    while left<=right:
-        while L[left]<=L[pivot]:
-            left+=1
-        while L[pivot]>=L[pivot]:
-            right-=1
-        temp = L[left]
-        L[left] = L[right]
+    stack = [(0, len(L)-1)]
+    while stack != []:
+        (start, end) = stack.pop()        
+        pivot = start
+        left = start + 1
+        right = end
+        swap = True
+        while swap:
+            swap = False
+            while L[left]<=L[pivot] and left<end:
+                left+=1
+            while L[right]>=L[pivot] and right>start:
+                right-=1
+            if left<right:
+                temp = L[left]
+                L[left] = L[right]
+                L[right] = temp
+                swap = True
+        temp = L[pivot]
+        L[pivot] = L[right]
         L[right] = temp
-        left+=1
-        right-=1
-        print("a")
-    temp = L[pivot]
-    L[pivot] = L[right]
-    L[right] = temp
+        if start< right:
+            stack.append((start, right))
+        if left<end:
+            stack.append((left, end))
     return L
 
-print(quick_sort_1([34, 56, 23, 81, 28, 66, 35, 17, 88, 37, 18, 50]))
-
+L = [34, 56, 23, 81, 28, 66, 35, 17, 88, 37, 18, 50]
+print(quick_sort(L.copy()))
+print(L)
 
 
 def test(length, trials):
-    """
-    Uses the build-in sort function to test a sorting algorythm
-    """
+    
+    #Uses the build-in sort function to test a sorting algorythm
+    
     success = True
     trial = 0
     while success and trial < trials:
         L = [random.randint(0, 10*length) for i in range(length)]
-        L1 = quick_sort(L)
-        L2 = L; L2.sort()
+        L1 = quick_sort(L.copy())
+        L2 = L.copy(); L2.sort()
         if L1 != L2:
             success = False
             print("Failed for", L)
@@ -104,11 +111,4 @@ def test(length, trials):
     if success:
         print("Test OK")
 
-"""
-L = [random.randint(0,10**6) for i in range(10**6)]
-print(L[0])
-
-time_m = timeit.timeit(setup = "from __main__ import merge_sort, merge_lists", stmt = "merge_sort(L)", number = 10, globals = {"L":"L"})
-print(time_m)
-
-"""
+test(13, 10)
