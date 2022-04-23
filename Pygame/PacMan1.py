@@ -133,13 +133,13 @@ class Player(pygame.sprite.Sprite):
         super().__init__()
         global h
         self.corner = map.get_player_spawn()
-        self.image = pygame.Surface([h,h])
+        self.image = pygame.Surface([h,h]) 
         self.image.fill(YELLOW) 
         self.rect = self.image.get_rect()
         self.rect.x = map.get_corner(self.corner).get_x()
         self.rect.y = map.get_corner(self.corner).get_y()
 
-        #turn around to face a corridor
+        #turn to face a corridor
         self.dir = 0
         while map.get_next(self.corner, self.dir) == -1: #no way
             self.dir = (self.dir+1)%4 #rotate 90deg anticlockwisely
@@ -155,8 +155,6 @@ class Player(pygame.sprite.Sprite):
         self.default_speed = 1
 
     def update(self):
-        self.image.fill(YELLOW)
-
         self.d += self.speed #move
         #update x and y
         if self.dir == 0:
@@ -174,22 +172,22 @@ class Player(pygame.sprite.Sprite):
             self.dir = self.turn
 
         if self.d >= self.dist: #reached the next corner
-            self.image.fill(RED)
-            self.d = 0
-            self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
+            self.d = 0 #reset d
+            self.corner = map.get_next(self.corner, self.dir) #change corner to next corner
+            self.rect.x = map.get_corner(self.corner).get_x() #assume the right position
+            self.rect.y = map.get_corner(self.corner).get_x()
 
-            if map.get_next(self.corner, self.turn) == -1: #impossible to keep moving
-                self.dir = (self.dir+2)%4 #turn around
+            if map.get_next(self.corner, self.turn) == -1: #there is NO neighbour in the dir direction
+                self.turn = abs(2-self.dir) #change direction to opposite
                 self.speed = 0 #stop
-            else:    
-                self.dir = self.turn
-
-            if self.dir%2 == 0: #looking horizontally
+            
+            self.dir = self.turn #change dir to the next direction
+            
+            #update dist
+            if self.dir%2 == 0: #moving horizontally
                 self.dist = abs( map.get_corner(self.corner).get_x() - map.get_corner(map.get_next(self.corner, self.dir)).get_x())
-            else: #looking vertically
+            else:
                 self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, self.dir)).get_y())
-
-            print("moved to ", self.corner, "facing", self.dir, "dist = ", self.dist)
 
         self.turn = self.dir #reset turn
 
@@ -197,21 +195,16 @@ class Player(pygame.sprite.Sprite):
         self.turn = turn
         if self.speed == 0: #move when a key is pressed
             if map.get_next(self.corner, self.turn) != -1: #there is a neighbour
-                print("possible to move")
                 self.speed = self.default_speed
                 self.dir = self.turn
-                
-                if self.dir%2 == 0: #looking horizontally
-                    self.dist = abs( map.get_corner(self.corner).get_x() - map.get_corner(map.get_next(self.corner, self.dir)).get_x())
-                else: #looking vertically
-                    self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, self.dir)).get_y())
+        #print("turn = ", turn, " dir = ", self.dir)
+
 
 #colours
 BLACK=(0,0,0)
 WHITE=(255,255,255)
 BLUE=(50,50,255)
 YELLOW=(255,255,0)
-RED = (255, 50, 50)
 
 #Initialize PyGame
 pygame.init()
