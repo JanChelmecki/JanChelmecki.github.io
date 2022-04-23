@@ -1,5 +1,3 @@
-import pygame, random
-
 def next(i,j, dir):
     """
     Returns the grid coordinates of the next tile in the dir direction
@@ -28,10 +26,12 @@ class Corner():
     def is_node(self):
         return self.neighbours.count(-1) != 2
 
+    def show(self, corner_num):
+        print(corner_num, " ", self.neighbours)
+
 class Map():
     def __init__(self, grid):
         self.grid = grid
-        self.h = 40
 
         #initialize corners
         self.corner = []
@@ -53,7 +53,7 @@ class Map():
                         hor += 1
 
                     if hor*vert != 0 or hor+vert == 1: #junction/branch/turn or dead end
-                        new = Corner(j*self.h, i*self.h) #create a new corner, with no neighbours yet
+                        new = Corner(20*j, 20*i) #create a new corner, with no neighbours yet
                         self.corner.append(new)
                         corner_pos.append((i,j)) #mark its position 'on the grid'
         
@@ -70,46 +70,15 @@ class Map():
                         self.corner[current].set_neighbour(dir, found) #connect current to found
                         self.corner[found].set_neighbour((dir+2)%4, current) #connect found to current
 
+        print(corner_pos)
+
     def get_next(self, corner_num, dir):
         return self.corner[corner_num].get_neighbour(dir)
 
-    def draw(self):
-        for i in range(len(self.grid)):
-            for j in range(len(self.grid[i])):
-                if self.grid[i][j] == 1:
-                    pygame.draw.rect(screen,BLUE,(j*self.h, i*self.h, self.h, self.h))
+    def show(self):
+        for n in range(len(self.corner)):
+            self.corner[n].show(n)
 
-class Game():
-    def __init__(self, level):
-        self.level = level
-
-    def controls(self):
-        for event in pygame.event.get():
-            if event.type==pygame.QUIT:
-                global done
-                done = True
-
-    def logic(self):
-        self.controls()
-        self.update_screen()
-
-    def update_screen(self):
-        screen.fill(BLACK)
-        map.draw()
-        pygame.display.flip()
-
-#colours
-BLACK=(0,0,0)
-WHITE=(255,255,255)
-BLUE=(50,50,255)
-YELLOW=(255,255,0)
-
-#Initialize PyGame
-pygame.init()
-size = (640,480)
-screen = pygame.display.set_mode(size)
-
-#load map
 grid1 = [
 [1, 1, 1, 1, 1, 1, 1],
 [1, 0, 1, 0, 0, 0, 1],
@@ -119,6 +88,7 @@ grid1 = [
 [1, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1]
 ]
+
 grid2 = [
 [1, 1, 1, 1, 1, 1, 1],
 [1, 0, 1, 0, 0, 0, 1],
@@ -128,6 +98,7 @@ grid2 = [
 [1, 0, 1, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1],
 ]
+
 grid3 = [
 [1, 1, 1, 1, 1, 1, 1, 1, 1],
 [1, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -139,24 +110,5 @@ grid3 = [
 [1, 0, 0, 0, 1, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
-
-map = Map(grid1)
-
-#--Titleofnewwindow/screen
-pygame.display.set_caption("PacMan")
-
-done=False
-
-#Manages how fast screen refreshes
-clock = pygame.time.Clock()
-
-g = Game(0)
-
-while not done:
-    g.logic()
-    for event in pygame.event.get():
-        if event.type==pygame.QUIT:
-            done = True
-    clock.tick(60)
-
-pygame.quit()
+map = Map(grid3)
+map.show()
