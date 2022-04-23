@@ -1,4 +1,4 @@
-import pygame, random
+import pygame
 
 def next(i,j, dir):
     """
@@ -24,14 +24,20 @@ class Corner():
 
     def set_neighbour(self, dir, a_corner):
         self.neighbours[dir] = a_corner
+    
+    def get_x(self):
+        return self.x
+
+    def get_y(self):
+        return self.y
 
     def is_node(self):
         return self.neighbours.count(-1) != 2
 
 class Map():
-    def __init__(self, grid):
+    def __init__(self, grid, h):
         self.grid = grid
-        self.h = 40
+        self.h = h
 
         #initialize corners
         self.corner = []
@@ -73,6 +79,9 @@ class Map():
     def get_next(self, corner_num, dir):
         return self.corner[corner_num].get_neighbour(dir)
 
+    def get_corner(self, corner_num):
+        return self.corner[corner_num]
+
     def draw(self):
         for i in range(len(self.grid)):
             for j in range(len(self.grid[i])):
@@ -82,6 +91,9 @@ class Map():
 class Game():
     def __init__(self, level):
         self.level = level
+        self.all_sprites_group = pygame.sprite.Group()
+        self.player = Player(0)
+        self.all_sprites_group.add(self.player)
 
     def controls(self):
         for event in pygame.event.get():
@@ -96,7 +108,61 @@ class Game():
     def update_screen(self):
         screen.fill(BLACK)
         map.draw()
+        self.all_sprites_group.draw(screen)
         pygame.display.flip()
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, corner):
+        super().__init__()
+        global h
+        self.image = pygame.Surface([h,h]) 
+        self.image.fill(YELLOW) 
+        self.rect = self.image.get_rect()
+        self.rect.x = map.get_corner(corner).get_x()
+        self.rect.y = map.get_corner(corner).get_y()
+        self.dir = 0
+        self.turn = 0
+        self.corner = corner
+        self.dist = 0
+        self.d = 0
+        self.speed = 2
+
+    def update(self):
+        self.d += self.speed #move
+        #update x and y
+        if dir == 0:
+            self.x += self.speed
+        elif dir == 1:
+            self.y -= self.speed
+        elif dir == 2:
+            self.x -= self.speed
+        elif dir == 3:
+            self.y += self.speed
+
+        if abs(self.turn - self.dir) == 2: #turn is opposite to dir, the player turns around
+            self.d = self.dist - self.d #change d to the distance from the next node
+            self.corner = map.get_next(self.corner, dir) #change corner to next corner
+            self.dir = self.turn
+
+        if self.d >= self.dist: #reached the next corner
+            self.d = 0 #reset d
+            self.corner = map.get_next(self.corner, dir) #change corner to next corner
+            self.x = map.get_corner(self.corner).get_x() #assume the right position
+            self.y = map.get_corner(self.corner).get_x()
+
+            if map.get_next(self.corner, self.turn) == -1: #there is NO neighbour in the dir direction
+                self.turn = abs(2-self.dir) #change direction to opposite
+                self.speed = 0 #stop
+            
+            self.dir = self.turn #change dir to the next direction
+            
+            #update dist
+            if self.dir%2 == 0: #moving horizontally
+                self.dist = abs( map.get_corner(self.corner).get_x() - map.get_corner(map.get_next(self.corner, dir)).get_x())
+            else:
+                self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, dir)).get_y())
+
+        self.turn = self.dir #reset turn
 
 #colours
 BLACK=(0,0,0)
@@ -140,7 +206,8 @@ grid3 = [
 [1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
 
-map = Map(grid1)
+h = 40
+map = Map(grid3, h)
 
 #--Titleofnewwindow/screen
 pygame.display.set_caption("PacMan")
@@ -154,9 +221,6 @@ g = Game(0)
 
 while not done:
     g.logic()
-    for event in pygame.event.get():
-        if event.type==pygame.QUIT:
-            done = True
     clock.tick(60)
 
 pygame.quit()
