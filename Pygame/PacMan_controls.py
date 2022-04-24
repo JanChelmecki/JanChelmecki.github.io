@@ -155,6 +155,8 @@ class Player(pygame.sprite.Sprite):
         self.default_speed = 1
 
     def update(self):
+        self.image.fill(YELLOW)
+
         self.d += self.speed #move
         #update x and y
         if self.dir == 0:
@@ -172,13 +174,13 @@ class Player(pygame.sprite.Sprite):
             self.dir = self.turn
 
         if self.d >= self.dist: #reached the next corner
+            self.image.fill(RED)
             self.d = 0
             self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
 
-            if map.get_next(self.corner, self.turn) == -1: #impossible to turn in the desired direction
-                if map.get_next(self.corner, self.dir) == -1: #impossible to keep moving:
-                    self.dir = (self.dir+2)%4 #turn around
-                    self.speed = 0 #stop
+            if map.get_next(self.corner, self.turn) == -1: #impossible to keep moving
+                self.dir = (self.dir+2)%4 #turn around
+                self.speed = 0 #stop
             else:    
                 self.dir = self.turn
 
@@ -187,12 +189,15 @@ class Player(pygame.sprite.Sprite):
             else: #looking vertically
                 self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, self.dir)).get_y())
 
+            print("moved to ", self.corner, "facing", self.dir, "dist = ", self.dist)
+
         self.turn = self.dir #reset turn
 
     def set_turn(self, turn):
         self.turn = turn
         if self.speed == 0: #move when a key is pressed
             if map.get_next(self.corner, self.turn) != -1: #there is a neighbour
+                print("possible to move")
                 self.speed = self.default_speed
                 self.dir = self.turn
                 
