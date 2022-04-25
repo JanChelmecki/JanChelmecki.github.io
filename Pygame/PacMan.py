@@ -24,15 +24,31 @@ class Corner():
 
     def set_neighbour(self, dir, a_corner):
         self.neighbours[dir] = a_corner
-    
+
+    def count_neighbours(self):
+        return 4-self.neighbours.count(-1)
+
     def get_x(self):
         return self.x
 
     def get_y(self):
         return self.y
 
-    def is_node(self):
-        return self.neighbours.count(-1) != 2
+class Node(Corner):
+    def __init__(self, x, y, r=-1, u=-1, l=-1, d=-1):
+        super().__init__(x, y, r, u, l, d)
+        self.adjacent = [-1, -1, -1, -1]
+        self.dist = [-1, -1, -1, -1]
+
+    def set_adjacent(self, dir, node, dist):
+        self.adjacent[dir] = node
+        self.dist[dir] = dist
+
+    def get_adjacent(self, dir):
+        return self.adjacent[dir]
+
+    def get_dist(self, dir):
+        return self.dist[dir]
 
 class Map():
     def __init__(self, grid, h):
@@ -44,6 +60,7 @@ class Map():
 
         #find all the corners
         corner_pos = [] #mark corners 'on the grid', list where n'th item is the corner's grid coordinates
+        self.node_nums = []
         for i in range(1, len(grid)-1):
             for j in range(1, len(grid[i])-1):
                 if grid[i][j] == 0: #not a wall
@@ -59,7 +76,11 @@ class Map():
                         hor += 1
 
                     if hor*vert != 0 or hor+vert == 1: #junction/branch/turn or dead end
-                        new = Corner(j*self.h, i*self.h) #create a new corner, with no neighbours yet
+                        if hor + vert == 2: #not a node, just a corner
+                            new = Corner(j*h, i*h) #create a new corner, with no neighbours yet
+                        else:
+                            new = Node(j*h, i*h)
+                            self.node_nums.append(len(self.corner)) #mark the corner as a node
                         self.corner.append(new)
                         corner_pos.append((i,j)) #mark its position 'on the grid'
         
@@ -76,6 +97,32 @@ class Map():
                         self.corner[current].set_neighbour(dir, found) #connect current to found
                         self.corner[found].set_neighbour((dir+2)%4, current) #connect found to current
 
+        #connect the nodes
+        for node in self.node_nums:
+            for dir in range(4): #look in each direction
+                if self.corner[node].get_neighbour(dir) != -1: #there is a neighbour
+                    if self.corner[node].get_adjacent(dir) == -1: #adjacent unknown
+                        #print("starting at", node, "exploring in dir = ", dir)
+                        dist = 0 #distance from node
+                        current = node
+                        dir0 = dir #direction of search (might change on turns)
+                        found = False
+                        while not found: #jump to the next corner in the corridor until reaching a node
+                            #find the other direction different from the corner
+                            dir1 = dir0
+                            while self.corner[current].get_neighbour(dir1) == -1 or (dir1-dir0)%4 == 2: #no way or facing opposite dir0
+                                dir1 = (dir1+1)%4 #rotate 90 deg anticlockwisely
+                            dir0 = dir1
+                            next_corner = self.corner[current].get_neighbour(dir0)
+                            dist += self.dist(current, next_corner, dir0) #update distance
+                            current = next_corner
+                            if current in self.node_nums: #stop if reached a node
+                                found = True
+
+                        #make the connection
+                        self.corner[node].set_adjacent(dir, current, dist)
+                        self.corner[current].set_adjacent((dir0+2)%4, node, dist)    
+
         self.player_spawn = 0
 
     def get_next(self, corner_num, dir):
@@ -83,6 +130,12 @@ class Map():
 
     def get_corner(self, corner_num):
         return self.corner[corner_num]
+
+    def dist(self, corner1, corner2, dir): #works only for connected corners, dir is the direction of the connection
+        if dir%2 == 0:
+            return abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
+        else:
+            return abs(self.corner[corner1].get_y()-self.corner[corner2].get_y())
 
     def draw(self):
         for i in range(len(self.grid)):
@@ -144,15 +197,10 @@ class Player(pygame.sprite.Sprite):
         while map.get_next(self.corner, self.dir) == -1: #no way
             self.dir = (self.dir+1)%4 #rotate 90deg anticlockwisely
         self.turn = 0
-        
-        #measure distance to the next corner
-        if self.dir%2 == 0: #looking horizontally
-            self.dist = abs( map.get_corner(self.corner).get_x() - map.get_corner(map.get_next(self.corner, self.dir)).get_x())
-        else: #looking vertically
-            self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, self.dir)).get_y())
+        self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
         self.d = 0
         self.speed = 0
-        self.default_speed = 1
+        self.default_speed = 2
 
     def update(self):
         self.d += self.speed #move
@@ -181,11 +229,8 @@ class Player(pygame.sprite.Sprite):
                     self.speed = 0 #stop
             else:    
                 self.dir = self.turn
-
-            if self.dir%2 == 0: #looking horizontally
-                self.dist = abs( map.get_corner(self.corner).get_x() - map.get_corner(map.get_next(self.corner, self.dir)).get_x())
-            else: #looking vertically
-                self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, self.dir)).get_y())
+            
+            self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
         self.turn = self.dir #reset turn
 
@@ -195,11 +240,7 @@ class Player(pygame.sprite.Sprite):
             if map.get_next(self.corner, self.turn) != -1: #there is a neighbour
                 self.speed = self.default_speed
                 self.dir = self.turn
-                
-                if self.dir%2 == 0: #looking horizontally
-                    self.dist = abs( map.get_corner(self.corner).get_x() - map.get_corner(map.get_next(self.corner, self.dir)).get_x())
-                else: #looking vertically
-                    self.dist = abs( map.get_corner(self.corner).get_y() - map.get_corner(map.get_next(self.corner, self.dir)).get_y())
+                self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
 #colours
 BLACK=(0,0,0)
