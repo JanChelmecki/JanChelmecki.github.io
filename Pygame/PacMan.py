@@ -1,4 +1,11 @@
-import pygame
+import pygame, random
+
+#colours
+BLACK=(0,0,0)
+WHITE=(255,255,255)
+BLUE=(50,50,255)
+YELLOW=(255,255,0)
+RED = (255, 50, 50)
 
 def next(i,j, dir):
     """
@@ -124,6 +131,7 @@ class Map():
                         self.corner[current].set_adjacent((dir0+2)%4, node, dist)    
 
         self.player_spawn = 0
+        self.ghost_spawn = [1]
 
     def get_next(self, corner_num, dir):
         return self.corner[corner_num].get_neighbour(dir)
@@ -146,12 +154,22 @@ class Map():
     def get_player_spawn(self):
         return self.player_spawn
 
+    def get_ghost_spawn(self):
+        return self.ghost_spawn
+
+    def get_grid(self):
+        return self.grid
+
 class Game():
     def __init__(self, level):
         self.level = level
         self.all_sprites_group = pygame.sprite.Group()
         self.player = Player()
         self.all_sprites_group.add(self.player)
+        #initialize ghosts
+        for spawn in map.get_ghost_spawn():
+            ghost = Ghost(spawn)
+            self.all_sprites_group.add(ghost)
 
     def controls(self):
         for event in pygame.event.get(): #stops the game, if required
@@ -200,7 +218,7 @@ class Player(pygame.sprite.Sprite):
         self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
         self.d = 0
         self.speed = 0
-        self.default_speed = 2
+        self.default_speed = 3
 
     def update(self):
         self.d += self.speed #move
@@ -223,6 +241,11 @@ class Player(pygame.sprite.Sprite):
             self.d = 0
             self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
 
+            
+            #assume the corner's position
+            self.rect.x = map.get_corner(self.corner).get_x()
+            self.rect.y = map.get_corner(self.corner).get_y()
+
             if map.get_next(self.corner, self.turn) == -1: #impossible to turn in the desired direction
                 if map.get_next(self.corner, self.dir) == -1: #impossible to keep moving:
                     self.dir = (self.dir+2)%4 #turn around
@@ -242,12 +265,79 @@ class Player(pygame.sprite.Sprite):
                 self.dir = self.turn
                 self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
-#colours
-BLACK=(0,0,0)
-WHITE=(255,255,255)
-BLUE=(50,50,255)
-YELLOW=(255,255,0)
-RED = (255, 50, 50)
+class Ghost(pygame.sprite.Sprite):
+    def __init__(self, spawn):
+        super().__init__()
+        global h
+        self.corner = spawn
+        self.image = pygame.Surface([h,h])
+        self.image.fill(RED) 
+        self.rect = self.image.get_rect()
+        self.rect.x = map.get_corner(self.corner).get_x()
+        self.rect.y = map.get_corner(self.corner).get_y()
+
+        #turn around to face a corridor
+        self.dir = 0
+        while map.get_next(self.corner, self.dir) == -1: #no way
+            self.dir = (self.dir+1)%4 #rotate 90deg anticlockwisely
+        self.turn = 0
+        self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
+        self.d = 0
+
+        self.speed = 2
+        self.nav = []
+
+    def update(self):
+        self.d += self.speed #move
+        #update x and y
+        if self.dir == 0:
+            self.rect.x += self.speed
+        elif self.dir == 1:
+            self.rect.y -= self.speed
+        elif self.dir == 2:
+            self.rect.x -= self.speed
+        elif self.dir == 3:
+            self.rect.y += self.speed
+
+        if self.d >= self.dist: #reached the next corner
+            self.d = 0
+            self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
+            
+            #assume the corner's position
+            self.rect.x = map.get_corner(self.corner).get_x()
+            self.rect.y = map.get_corner(self.corner).get_y()
+            
+            
+            dir0 = (self.dir+2)%4 #the direction the ghost came from
+
+            if type(map.get_corner(self.corner)) == Node: #at a node
+
+                if self.nav == []: #no directions given
+                    self.dir = random.randint(0,3) #face a random direction
+                else:
+                    self.dir = self.nav.pop() #remove the first turn from the list and go there
+
+            #if not at a node or impossible to turn, check for directions different than the one you came from
+            count = 0
+            while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
+                self.dir = (self.dir+1)%4 #turn left
+                count += 1
+
+            if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
+                self.dir = dir0
+            
+            self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
+
+class Dot(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+
+        super().__init__()
+
+        self.image = pygame.Surface([h, h])
+        self.image.fill(WHITE)
+        
+        # Draw the player
+        pygame.draw.circle(self.image, WHITE, (h//2, h//2), 5)
 
 #Initialize PyGame
 pygame.init()

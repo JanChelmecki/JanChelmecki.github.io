@@ -89,8 +89,41 @@ def quick_sort(L):
 
 L = [34, 56, 23, 81, 28, 66, 35, 17, 88, 37, 18, 50]
 print(quick_sort(L.copy()))
-print(L)
 
+def sort_it(L):
+    if len(L)<=1:
+        return L
+    stack = [(0, len(L)-1)]
+    while stack != []:
+        (start, end) = stack.pop()
+        length1 = end-start #length+1
+        if length1 < 10: #insertion sort
+            for i in range(1, length1):
+                start+=1 #
+        else:
+            pivot = start
+            left = start + 1
+            right = end
+            swap = True
+            while swap:
+                swap = False
+                while L[left]<=L[pivot] and left<end:
+                    left+=1
+                while L[right]>=L[pivot] and right>start:
+                    right-=1
+                if left<right:
+                    temp = L[left]
+                    L[left] = L[right]
+                    L[right] = temp
+                    swap = True
+            temp = L[pivot]
+            L[pivot] = L[right]
+            L[right] = temp
+            if start< right:
+                stack.append((start, right))
+            if left<end:
+                stack.append((left, end))
+    return L
 
 def test(length, trials):
     

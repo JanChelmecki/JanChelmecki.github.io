@@ -34,5 +34,3 @@ def binary_search(list, item):
         return False
 
 print(binary_search([1,3,5,7,9], -1))
-
-        

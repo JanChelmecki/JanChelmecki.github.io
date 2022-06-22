@@ -140,6 +140,23 @@ class Map():
         for n in self.node_nums:
             self.corner[n].display(n)
 
+    def h(self, corner1, corner2):
+        return ( abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
+        + abs(self.corner[corner1].get_y()-self.corner[corner2].get_y()) )
+
+    def route(self, start, end):
+
+        current = start
+        visited = [False for n in self.node_nums]
+        g = [-1 for n in self.node_nums]
+        from_dir = [0 for n in self.node_nums]
+        while True:
+            for dir in range(4):
+                if self.corner[current].get_adjacent(dir) != -1:
+                    pass
+
+
+
 grid1 = [
 [1, 1, 1, 1, 1, 1, 1],
 [1, 0, 1, 0, 0, 0, 1],
