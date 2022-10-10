@@ -1,4 +1,3 @@
-from turtle import back
 import pygame, random
 
 #colours
@@ -6,11 +5,11 @@ BLACK=(0,0,0)
 WHITE=(255,255,255)
 BLUE=(50,50,255)
 YELLOW=(255,255,0)
+A=(150,150,0)
 RED = (255, 50, 50)
 
 pygame.font.init()
 myfont = pygame.font.SysFont(None, 40)
-bigfont = pygame.font.SysFont(None, 200)
 
 def next(i,j, dir):
     """
@@ -68,6 +67,7 @@ class Map():
         self.up = 60
         self.left = (size[0]-h*len(grid[0]))//2
         self.h = h
+        self.wall_color = BLUE
         #initialize corners
         self.corner = []
 
@@ -136,29 +136,14 @@ class Map():
                         self.corner[node].set_adjacent(dir, current, dist)
                         self.corner[current].set_adjacent((dir0+2)%4, node, dist)    
 
-        self.player_spawn = self.node_nums[0]
-        self.ghost_spawn = [self.node_nums[-1], self.node_nums[-2], self.node_nums[-3]]
+        self.player_spawn = 0 #random.randint(0, len(self.corner)-1)
+        self.ghost_spawn = [-1, -2, -3]
 
     def get_next(self, corner_num, dir):
         return self.corner[corner_num].get_neighbour(dir)
 
-    def get_adjacent(self, node_num, dir):
-        return self.corner[node_num].get_adjacent(dir)
-
-    def get_dist(self, node_num, dir):
-        return self.corner[node_num].get_dist(dir)
-
     def get_corner(self, corner_num):
         return self.corner[corner_num]
-
-    def dir_back(self, corner_num, dir): #returns the direction to come from corner's node neighbour in dir direction back to corner
-        corner_num = self.corner[corner_num].get_neighbour(dir)
-        while corner_num not in self.node_nums: #not a node
-            dir0 = (dir+2)%4 #direction you came from
-            while self.corner[corner_num].get_neighbour(dir) == -1 or dir==dir0: #while no further neighbour
-                dir = (dir+1)%4 #rotate
-            corner_num = self.corner[corner_num].get_neighbour(dir) #then jump to next corner, until reaching a node
-        return (dir+2)%4 #the direction you came from           
 
     def dist(self, corner1, corner2, dir): #works only for connected corners, dir is the direction of the connection
         if dir%2 == 0: #dir is horizontal
@@ -170,22 +155,16 @@ class Map():
         for i in range(len(self.grid)):
             for j in range(len(self.grid[i])):
                 if self.grid[i][j] == 1:
-                    pygame.draw.rect(screen,BLUE,(j*self.h+self.left, i*self.h+self.up, self.h, self.h))
+                    pygame.draw.rect(screen,self.wall_color,(j*self.h+self.left, i*self.h+self.up, self.h, self.h))
 
-    def get_player_spawn(self):
-        return self.player_spawn
-
-    def get_ghost_spawn(self):
-        return self.ghost_spawn
-
-    def get_grid(self):
-        return self.grid
-
-    def get_up(self):
-        return self.up
-
-    def get_left(self):
-        return self.left
+    def next_node(self, corner, dir):
+        current = self.corner[corner].get_neighbour(dir)
+        while current not in self.node_nums:
+            xdir = (dir+2)%4 #do not go there
+            while self.corner[current].get_neighbour(dir) == -1 or dir == xdir:
+                dir = (dir+1)%4
+            current = self.corner[current].get_neighbour(dir)
+        return current, (dir+2)%4
 
     def heuristic(self, corner1, corner2):
         return ( abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
@@ -200,11 +179,7 @@ class Map():
             visited[node] = False
             g[node] = -1 #-1 is used as infinity here
 
-        g[start] = 0
-        if start not in self.node_nums:
-            print("Corner", start, "is not a node.")
-            return [], 0
-        
+        g[start] = 0 
         while not visited[end]:
             #find the unvisited node with the shortest distance from start and save it as current
             dist_min = -1 #infinite
@@ -230,10 +205,22 @@ class Map():
             nav.insert(0, prev_dir[current])
             current = prev_node[current] #move one node back
 
-        return nav, g[end]
+        return nav
 
-    def is_node(self, corner):
-        return corner in self.node_nums
+    def get_player_spawn(self):
+        return self.player_spawn
+
+    def get_ghost_spawn(self):
+        return self.ghost_spawn
+
+    def get_grid(self):
+        return self.grid
+
+    def get_up(self):
+        return self.up
+
+    def get_left(self):
+        return self.left
 
 class Game():
     def __init__(self, level):
@@ -261,8 +248,6 @@ class Game():
                     dot = Dot(i*h+h//2+left, j*h+h//2+up)
                     self.dot_group.add(dot)
 
-        self.tracking = False
-
     def controls(self):
         for event in pygame.event.get(): #stops the game, if required
             if event.type==pygame.QUIT:
@@ -280,15 +265,13 @@ class Game():
             self.player.set_turn(3)
 
     def logic(self):
-        global score, nextscreen, level
-
+        global score, level, nextscreen
         self.controls()
-
-        #handle collisions with dots
         for dot in pygame.sprite.spritecollide(self.player, self.dot_group, True):
             score += 5
+
         if len(self.dot_group) == 0: #all dots eaten
-            level += 1 #next level
+            level += 1
             nextscreen = "Game"
 
         #handle collisions with ghosts
@@ -306,15 +289,22 @@ class Game():
                 ghost = Ghost(spawn)
                 self.all_sprites_group.add(ghost)
                 self.ghost_group.add(ghost)
-        
-        if self.player.is_at_node():
-            if self.tracking:
-                self.navigate_ghosts()
-        else:
-            self.tracking = True
 
         self.all_sprites_group.update()
         self.update_screen()
+
+        if self.player.get_d() == 0 and map.get_corner(self.player.get_corner()).count_neighbours()>2:
+            count = 0
+            for ghost in self.ghost_group:
+                end, dir = map.next_node(self.player.get_corner(), self.player.get_dir())
+                rand = random.randint(0,1)
+                if count == 2 or (count ==1 and rand == 0):
+                    end = self.player.get_corner()
+                    dir = self.player.get_dir()
+                start, dir0 = map.next_node(ghost.get_corner(), ghost.get_dir())
+                nav = map.route(start, end)+[dir]
+                ghost.set_nav(nav)
+                count += 1
 
     def update_screen(self):
         screen.fill(BLACK)
@@ -325,45 +315,21 @@ class Game():
         pygame.display.flip()
 
     def scoreboard(self):
+        screen.blit(myfont.render("Score: "+str(score), 1, WHITE), (440, 5))
+        screen.blit(myfont.render("Lives: "+str(self.lives), 1, WHITE), (440, 35))
         screen.blit(myfont.render("Level "+str(self.level), 1, YELLOW), (200, 5))
-        screen.blit(myfont.render("Score: "+str(score), 1, WHITE), (430, 5))
-        screen.blit(myfont.render("Lives: "+str(self.lives), 1, WHITE), (700, 5))
 
     def navigate_ghosts(self):
-        global map
-        player_pos = self.player.get_corner()
-        ahead = map.get_adjacent(player_pos, self.player.get_dir()) #node in front of the player
-        back_dir = map.dir_back(player_pos, self.player.get_dir()) #direction from ahead to player_pos
-        ends = [player_pos]+2*[ahead] #target nodes
-        end_dir = [self.player.get_dir()]  +2*[back_dir] #direction from target nodes
-        count = 0
-
         for ghost in self.ghost_group:
-            end = ends[count]
-            start1 = ghost.get_node() #node behind
-            start2 = map.get_adjacent(start1, ghost.get_node_dir()) #node ahead
-            route1, dist1 = map.route(start1, end) #compute the route if turning around
-            route2, dist2 = map.route(start2, end) #route if going ahead
-
-            #account for the distances to the starting nodes
-            dist1 += ghost.get_node_d()
-            dist2 += map.get_dist(ghost.get_node(), ghost.get_node_dir()) - ghost.get_node_d()
-            route1.append((ghost.get_dir()+2)%4) #you'll need to turn around to get to the node behind
-            
-            if dist1<dist2: #it is better to turn around
-                route1.insert(0, -1) #-1 tells the ghost to turn around
-                nav = route1
-            else:
-                nav = route2
-
-            nav = route2
-            
-            nav.append(end_dir[count]) #get into where the player is after reaching your destination
-
-            ghost.set_nav(nav)
-            count += 1
-
-        self.tracking_ghosts = False #disable tracking
+                end, dir = map.next_node(self.player.get_corner(), self.player.get_dir())
+                rand = random.randint(0,4)
+                if count == 2 or (count ==1 and rand == 0):
+                    end = self.player.get_corner()
+                    dir = self.player.get_dir()
+                start, dir0 = map.next_node(ghost.get_corner(), ghost.get_dir())
+                nav = map.route(start, end)+[dir]
+                ghost.set_nav(nav)
+                count += 1
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -386,7 +352,10 @@ class Player(pygame.sprite.Sprite):
         self.d = 0
         self.speed = 0
         self.default_speed = 3
-    
+
+        self.immune = -1
+        self.boost = -1
+
     def update(self):
         self.d += self.speed #move
         #update x and y
@@ -407,6 +376,7 @@ class Player(pygame.sprite.Sprite):
         if self.d >= self.dist: #reached the next corner
             self.d = 0
             self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
+
             
             #assume the corner's position
             self.rect.x = map.get_corner(self.corner).get_x()
@@ -431,21 +401,15 @@ class Player(pygame.sprite.Sprite):
                 self.dir = self.turn
                 self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
+    def get_d(self):
+        return self.d
+
     def get_corner(self):
         return self.corner
 
     def get_dir(self):
         return self.dir
-
-    def get_d(self):
-        return self.d
-
-    def is_at_node(self):
-        if self.d==0 and map.is_node(self.corner):
-            return True
-        else:
-            return False
-
+        
 class Ghost(pygame.sprite.Sprite):
     def __init__(self, spawn):
         super().__init__()
@@ -465,16 +429,11 @@ class Ghost(pygame.sprite.Sprite):
         self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
         self.d = 0
 
-        self.node = self.corner
-        self.node_d = 0 #keep track of position relative to nodes
-        self.node_dir = self.dir
-
         self.speed = 2
         self.nav = []
 
     def update(self):
         self.d += self.speed #move
-        self.node_d += self.speed #update distance from the last node
         #update x and y
         if self.dir == 0:
             self.rect.x += self.speed
@@ -493,53 +452,38 @@ class Ghost(pygame.sprite.Sprite):
             self.rect.x = map.get_corner(self.corner).get_x()
             self.rect.y = map.get_corner(self.corner).get_y()
             
-            #decide dir
+            
             dir0 = (self.dir+2)%4 #the direction the ghost came from
-            if map.is_node(self.corner) and self.nav != []: #at a node and given directions
-                self.dir = self.nav.pop(0) #remove the first turn from the list and go there
-                if map.get_next(self.corner, self.dir) == -1:
-                    print("Wrong directions") #for the purposes of testing only
-            else: #at a corner or no directions given
-                self.dir = random.randint(0,3) #face a random direction
-                count = 0 #check for directions different than the one you came from
-                while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
-                    self.dir = (self.dir+1)%4 #turn left
-                    count += 1
-                if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
-                    self.dir = dir0
 
-            #once dir is decided, compute node parameters and dist
-            if map.is_node(self.corner): #update position with respect to the node structures
-                self.node = self.corner
-                self.node_d = 0
-                self.node_dir = self.dir
+            if type(map.get_corner(self.corner)) == Node: #at a node
+
+                if self.nav == []: #no directions given
+                    self.dir = random.randint(0,3) #face a random direction
+                else:
+                    self.dir = self.nav.pop(0) #remove the first turn from the list and go there
+                    if map.get_next(self.corner, self.dir) == -1:
+                        print(1)
+
+            #if not at a node or impossible to turn, check for directions different than the one you came from
+            count = 0
+            while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
+                self.dir = (self.dir+1)%4 #turn left
+                count += 1
+
+            if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
+                self.dir = dir0
+            
             self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
-    def set_nav(self, nav):
-        self.nav = nav
-        if nav[0] == -1: #turn around
-            #update node coordinates
-            self.node = map.get_adjacent(self.node, self.node_dir)
-            self.node_dir = map.dir_back(self.corner, self.dir)
-            self.node_d = map.get_dist(self.node, self.node_dir)-self.node_d
-
-            self.d = self.dist - self.d #change d to the distance from the next corner
-            self.corner = map.get_next(self.corner, self.dir) #change corner to next corner
-            self.dir = (self.dir+2)%4
-
-
-    def get_node(self):
-        return self.node
-    
-    def get_node_dir(self):
-        return self.node_dir
-
-    def get_node_d(self):
-        return self.node_d
+    def get_corner(self):
+        return self.corner
 
     def get_dir(self):
         return self.dir
-        
+
+    def set_nav(self, nav):
+        self.nav = nav
+
 class Dot(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
@@ -554,7 +498,7 @@ class WelcomeMenu():
         self.scroll = True #a flag indicating whether it is currently possible to change between options
         global level, score
         level = 1 #reset game parameters
-        score = 0
+        score = -5
 
     def logic(self):
         global done, nextscreen
@@ -583,18 +527,16 @@ class WelcomeMenu():
                 done = True
         
         screen.fill(BLACK)
-        
-        screen.blit(bigfont.render("PAC-MAN", 1, YELLOW), (180, 10))
         for i in range(len(self.options)):
             if i == self.current:
-                screen.blit(myfont.render(self.options[i], 1, WHITE), (440, 200+50*i)) #highlight the current option
+                screen.blit(myfont.render(self.options[i], 1, WHITE), (440, 10+50*i))
             else:
-                screen.blit(myfont.render(self.options[i], 1, (50, 50, 50)), (440, 200+50*i)) #make other options a bit darker
+                screen.blit(myfont.render(self.options[i], 1, (50, 50, 50)), (440, 10+50*i))
         pygame.display.flip()
 
 class GameOverScreen():
     def __init__(self) -> None:
-        self.ready_to_exit = False #a flag indicating whether the space bar has been pressed
+        pass
 
     def logic(self):
         global done, score, level, nextscreen
@@ -604,21 +546,20 @@ class GameOverScreen():
                 done = True
 
         keys = pygame.key.get_pressed() 
-
-        if keys[pygame.K_SPACE]:
-            self.ready_to_exit = True
-
-        if not keys[pygame.K_SPACE] and self.ready_to_exit: #the user has let go off the space bar
+        if keys[pygame.K_SPACE]: #switch to Welcome Menu, if any keys pressed
             nextscreen = "WelcomeMenu"
         
         screen.fill(BLACK)
-        screen.blit(bigfont.render("GAME OVER", 1, YELLOW), (80, 200))
-        screen.blit(myfont.render("You have reached level "+str(level)+" and scored "+str(score), 1, WHITE), (200, 350))
+        screen.blit(myfont.render("GAME OVER", 1, YELLOW), (400, 60))
+        screen.blit(myfont.render("You have reached level "+str(level)+" and reached a score of "+str(score), 1, WHITE), (200, 100))
+        screen.blit(myfont.render("Press any button to return to the menu", 1, WHITE), (200, 140))
 
 
         pygame.display.flip()
+        
 
-#initialize PyGame
+
+#Initialize PyGame
 pygame.init()
 size = (1000,750)
 screen = pygame.display.set_mode(size)
@@ -723,14 +664,52 @@ grid7 = [
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
+grid8 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+grid9 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1],
+[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
 
-h = 40 #tile width
+h = 40
 map = Map(grid7, h)
 score = 0
 level = 1
 nextscreen = "N" #do not change screens
 
-#title of new window
+#--Titleofnewwindow/screen
 pygame.display.set_caption("PacMan")
 
 done=False
@@ -743,13 +722,12 @@ g = WelcomeMenu()
 while not done:
     g.logic()
     clock.tick(60)
-    if nextscreen != "N": #change screens
+    if nextscreen != "N":
         if nextscreen == "Game":
             g = Game(level)
         elif nextscreen == "WelcomeMenu":
             g = WelcomeMenu()
         elif nextscreen == "GameOverScreen":
             g = GameOverScreen()
-        nextscreen = "N" #stop changing screens
-
+        nextscreen = "N"
 pygame.quit()

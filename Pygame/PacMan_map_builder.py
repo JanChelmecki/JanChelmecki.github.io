@@ -1,4 +1,3 @@
-from turtle import back
 import pygame, random
 
 #colours
@@ -136,29 +135,14 @@ class Map():
                         self.corner[node].set_adjacent(dir, current, dist)
                         self.corner[current].set_adjacent((dir0+2)%4, node, dist)    
 
-        self.player_spawn = self.node_nums[0]
-        self.ghost_spawn = [self.node_nums[-1], self.node_nums[-2], self.node_nums[-3]]
+        self.player_spawn = 0
+        self.ghost_spawn = [-1, -2, -3]
 
     def get_next(self, corner_num, dir):
         return self.corner[corner_num].get_neighbour(dir)
 
-    def get_adjacent(self, node_num, dir):
-        return self.corner[node_num].get_adjacent(dir)
-
-    def get_dist(self, node_num, dir):
-        return self.corner[node_num].get_dist(dir)
-
     def get_corner(self, corner_num):
         return self.corner[corner_num]
-
-    def dir_back(self, corner_num, dir): #returns the direction to come from corner's node neighbour in dir direction back to corner
-        corner_num = self.corner[corner_num].get_neighbour(dir)
-        while corner_num not in self.node_nums: #not a node
-            dir0 = (dir+2)%4 #direction you came from
-            while self.corner[corner_num].get_neighbour(dir) == -1 or dir==dir0: #while no further neighbour
-                dir = (dir+1)%4 #rotate
-            corner_num = self.corner[corner_num].get_neighbour(dir) #then jump to next corner, until reaching a node
-        return (dir+2)%4 #the direction you came from           
 
     def dist(self, corner1, corner2, dir): #works only for connected corners, dir is the direction of the connection
         if dir%2 == 0: #dir is horizontal
@@ -187,54 +171,6 @@ class Map():
     def get_left(self):
         return self.left
 
-    def heuristic(self, corner1, corner2):
-        return ( abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
-        + abs(self.corner[corner1].get_y()-self.corner[corner2].get_y()) )
-
-    def route(self, start, end): #finds optimal path from start to end, BOTH start and end have to be nodes
-        visited = {} 
-        prev_dir = {}
-        prev_node = {}
-        g = {} #best known distances from start
-        for node in self.node_nums:
-            visited[node] = False
-            g[node] = -1 #-1 is used as infinity here
-
-        g[start] = 0
-        if start not in self.node_nums:
-            print("Corner", start, "is not a node.")
-            return [], 0
-        
-        while not visited[end]:
-            #find the unvisited node with the shortest distance from start and save it as current
-            dist_min = -1 #infinite
-            for node in self.node_nums:
-                if not visited[node] and g[node] != -1: #unvisited but already discovered
-                    if g[node]+self.heuristic(node, end) < dist_min or dist_min == -1: #found a node that has better estimated distance
-                        dist_min = g[node] + self.heuristic(node, end)
-                        current = node
-            visited[current] = True #mark the current node as visited
-
-            for dir in range(4): #look in every direction
-                next = self.corner[current].get_adjacent(dir)
-                if next != -1: #there is a neighbour
-                    if not visited[next]:
-                        new_dist = g[current] + self.corner[current].get_dist(dir) #compute distance from current
-                        if g[next] == -1 or new_dist < g[next]: #undiscovered or found a shorter path
-                            g[next] = new_dist #overwrite distance
-                            prev_dir[next] = dir
-                            prev_node[next] = current
-        #trace back to start, current is currently end
-        nav = []
-        while current != start:
-            nav.insert(0, prev_dir[current])
-            current = prev_node[current] #move one node back
-
-        return nav, g[end]
-
-    def is_node(self, corner):
-        return corner in self.node_nums
-
 class Game():
     def __init__(self, level):
         self.level = level
@@ -260,8 +196,6 @@ class Game():
                 if grid[j][i] == 0:
                     dot = Dot(i*h+h//2+left, j*h+h//2+up)
                     self.dot_group.add(dot)
-
-        self.tracking = False
 
     def controls(self):
         for event in pygame.event.get(): #stops the game, if required
@@ -306,12 +240,6 @@ class Game():
                 ghost = Ghost(spawn)
                 self.all_sprites_group.add(ghost)
                 self.ghost_group.add(ghost)
-        
-        if self.player.is_at_node():
-            if self.tracking:
-                self.navigate_ghosts()
-        else:
-            self.tracking = True
 
         self.all_sprites_group.update()
         self.update_screen()
@@ -328,42 +256,6 @@ class Game():
         screen.blit(myfont.render("Level "+str(self.level), 1, YELLOW), (200, 5))
         screen.blit(myfont.render("Score: "+str(score), 1, WHITE), (430, 5))
         screen.blit(myfont.render("Lives: "+str(self.lives), 1, WHITE), (700, 5))
-
-    def navigate_ghosts(self):
-        global map
-        player_pos = self.player.get_corner()
-        ahead = map.get_adjacent(player_pos, self.player.get_dir()) #node in front of the player
-        back_dir = map.dir_back(player_pos, self.player.get_dir()) #direction from ahead to player_pos
-        ends = [player_pos]+2*[ahead] #target nodes
-        end_dir = [self.player.get_dir()]  +2*[back_dir] #direction from target nodes
-        count = 0
-
-        for ghost in self.ghost_group:
-            end = ends[count]
-            start1 = ghost.get_node() #node behind
-            start2 = map.get_adjacent(start1, ghost.get_node_dir()) #node ahead
-            route1, dist1 = map.route(start1, end) #compute the route if turning around
-            route2, dist2 = map.route(start2, end) #route if going ahead
-
-            #account for the distances to the starting nodes
-            dist1 += ghost.get_node_d()
-            dist2 += map.get_dist(ghost.get_node(), ghost.get_node_dir()) - ghost.get_node_d()
-            route1.append((ghost.get_dir()+2)%4) #you'll need to turn around to get to the node behind
-            
-            if dist1<dist2: #it is better to turn around
-                route1.insert(0, -1) #-1 tells the ghost to turn around
-                nav = route1
-            else:
-                nav = route2
-
-            nav = route2
-            
-            nav.append(end_dir[count]) #get into where the player is after reaching your destination
-
-            ghost.set_nav(nav)
-            count += 1
-
-        self.tracking_ghosts = False #disable tracking
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -407,6 +299,7 @@ class Player(pygame.sprite.Sprite):
         if self.d >= self.dist: #reached the next corner
             self.d = 0
             self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
+
             
             #assume the corner's position
             self.rect.x = map.get_corner(self.corner).get_x()
@@ -431,21 +324,6 @@ class Player(pygame.sprite.Sprite):
                 self.dir = self.turn
                 self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
-    def get_corner(self):
-        return self.corner
-
-    def get_dir(self):
-        return self.dir
-
-    def get_d(self):
-        return self.d
-
-    def is_at_node(self):
-        if self.d==0 and map.is_node(self.corner):
-            return True
-        else:
-            return False
-
 class Ghost(pygame.sprite.Sprite):
     def __init__(self, spawn):
         super().__init__()
@@ -465,16 +343,11 @@ class Ghost(pygame.sprite.Sprite):
         self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
         self.d = 0
 
-        self.node = self.corner
-        self.node_d = 0 #keep track of position relative to nodes
-        self.node_dir = self.dir
-
         self.speed = 2
         self.nav = []
 
     def update(self):
         self.d += self.speed #move
-        self.node_d += self.speed #update distance from the last node
         #update x and y
         if self.dir == 0:
             self.rect.x += self.speed
@@ -493,53 +366,27 @@ class Ghost(pygame.sprite.Sprite):
             self.rect.x = map.get_corner(self.corner).get_x()
             self.rect.y = map.get_corner(self.corner).get_y()
             
-            #decide dir
+            
             dir0 = (self.dir+2)%4 #the direction the ghost came from
-            if map.is_node(self.corner) and self.nav != []: #at a node and given directions
-                self.dir = self.nav.pop(0) #remove the first turn from the list and go there
-                if map.get_next(self.corner, self.dir) == -1:
-                    print("Wrong directions") #for the purposes of testing only
-            else: #at a corner or no directions given
-                self.dir = random.randint(0,3) #face a random direction
-                count = 0 #check for directions different than the one you came from
-                while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
-                    self.dir = (self.dir+1)%4 #turn left
-                    count += 1
-                if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
-                    self.dir = dir0
 
-            #once dir is decided, compute node parameters and dist
-            if map.is_node(self.corner): #update position with respect to the node structures
-                self.node = self.corner
-                self.node_d = 0
-                self.node_dir = self.dir
+            if type(map.get_corner(self.corner)) == Node: #at a node
+
+                if self.nav == []: #no directions given
+                    self.dir = random.randint(0,3) #face a random direction
+                else:
+                    self.dir = self.nav.pop() #remove the first turn from the list and go there
+
+            #if not at a node or impossible to turn, check for directions different than the one you came from
+            count = 0
+            while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
+                self.dir = (self.dir+1)%4 #turn left
+                count += 1
+
+            if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
+                self.dir = dir0
+            
             self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
-    def set_nav(self, nav):
-        self.nav = nav
-        if nav[0] == -1: #turn around
-            #update node coordinates
-            self.node = map.get_adjacent(self.node, self.node_dir)
-            self.node_dir = map.dir_back(self.corner, self.dir)
-            self.node_d = map.get_dist(self.node, self.node_dir)-self.node_d
-
-            self.d = self.dist - self.d #change d to the distance from the next corner
-            self.corner = map.get_next(self.corner, self.dir) #change corner to next corner
-            self.dir = (self.dir+2)%4
-
-
-    def get_node(self):
-        return self.node
-    
-    def get_node_dir(self):
-        return self.node_dir
-
-    def get_node_d(self):
-        return self.node_d
-
-    def get_dir(self):
-        return self.dir
-        
 class Dot(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
@@ -618,7 +465,22 @@ class GameOverScreen():
 
         pygame.display.flip()
 
-#initialize PyGame
+class MapBuilder():
+    def __init__(self) -> None:
+        self.n = 17 #the grid will be n X n, n should be odd
+        self.grid = [self.n*[1]]
+        row0 = [1]+(self.n-2)*[0]+[1]
+        row1 = (self.n//2)*[1,0]+[1]
+        for i in range((self.n-3)//2):
+            self.grid.append(row0)
+            self.grid.append(row1)
+        self.grid.append(row0)
+        self.grid.append(self.n*[1])
+    
+    def logic(self):
+        pass
+
+#Initialize PyGame
 pygame.init()
 size = (1000,750)
 screen = pygame.display.set_mode(size)
@@ -704,33 +566,14 @@ grid6 = [
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
-grid7 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
 
 h = 40 #tile width
-map = Map(grid7, h)
+map = Map(grid5, h)
 score = 0
 level = 1
 nextscreen = "N" #do not change screens
 
-#title of new window
+#--Titleofnewwindow/screen
 pygame.display.set_caption("PacMan")
 
 done=False

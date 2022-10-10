@@ -135,26 +135,49 @@ class Map():
         else:
             return abs(self.corner[corner1].get_y()-self.corner[corner2].get_y())
 
-    def show(self):
-        print("Node number, adjacent, dist")
-        for n in self.node_nums:
-            self.corner[n].display(n)
+    def get_corner(self, number):
+        return self.corner[number]
 
-    def h(self, corner1, corner2):
+    def heuristic(self, corner1, corner2):
         return ( abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
         + abs(self.corner[corner1].get_y()-self.corner[corner2].get_y()) )
 
-    def route(self, start, end):
+    def route(self, start, end): #finds optimal path from start to end, BOTH start and end have to be nodes
+        visited = {} 
+        prev_dir = {}
+        prev_node = {}
+        g = {} #best known distances from start
+        for node in self.node_nums:
+            visited[node] = False
+            g[node] = -1 #-1 is used as infinity here
 
-        current = start
-        visited = [False for n in self.node_nums]
-        g = [-1 for n in self.node_nums]
-        from_dir = [0 for n in self.node_nums]
-        while True:
-            for dir in range(4):
-                if self.corner[current].get_adjacent(dir) != -1:
-                    pass
+        g[start] = 0 
+        while not visited[end]:
+            #find the unvisited node with the shortest distance from start and save it as current
+            dist_min = -1 #infinite
+            for node in self.node_nums:
+                if not visited[node] and g[node] != -1: #unvisited but already discovered
+                    if g[node]+self.heuristic(node, end) < dist_min or dist_min == -1: #found a node that has better estimated distance
+                        dist_min = g[node] + self.heuristic(node, end)
+                        current = node
+            visited[current] = True #mark the current node as visited
 
+            for dir in range(4): #look in every direction
+                next = self.corner[current].get_adjacent(dir)
+                if next != -1: #there is a neighbour
+                    if not visited[next]:
+                        new_dist = g[current] + self.corner[current].get_dist(dir) #compute distance from current
+                        if g[next] == -1 or new_dist < g[next]: #undiscovered or found a shorter path
+                            g[next] = new_dist #overwrite distance
+                            prev_dir[next] = dir
+                            prev_node[next] = current
+        #trace back to start, current is currently end
+        nav = []
+        while current != start:
+            nav.insert(0, prev_dir[current])
+            current = prev_node[current] #move one node back
+
+        return nav
 
 
 grid1 = [
@@ -189,11 +212,63 @@ grid3 = [
 [1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
 
-map = Map(grid1)
+grid4 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
 
-i = 1
-for grid in [grid1, grid2, grid3]:
-    print(); print("grid",i)
-    map = Map(grid)
-    map.show()
-    i+=1
+grid5 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+
+grid6 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+[1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+
+map = Map(grid6)
+test_pairs = [(10, 10), (20, 20), (1, 17), (43, 37), (3, 32), (43, 46), (1, 46), (10, 9)]
+#[(1,1), (28, 28), (1,6), (35,26), (3, 35), (35, 3), (22, 21), (9, 28)]
+print("grid6 results:")
+for (start, end) in test_pairs:
+    print("from", start, "to", end, ":", map.route(start, end))

@@ -60,9 +60,9 @@ class Game():
             invader_queens = 1
         else:
             self.recreate_invaders = False
-            invaders = 0
-            hunting_invaders = 0
-            invader_queens = 5
+            invaders = 10
+            hunting_invaders = 5
+            invader_queens = 2
         #endregion
         self.screen = pygame.display.set_mode(size)
         self.clock = pygame.time.Clock()
