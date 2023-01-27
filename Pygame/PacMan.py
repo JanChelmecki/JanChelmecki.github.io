@@ -1,4 +1,3 @@
-from turtle import back
 import pygame, random
 
 #colours
@@ -7,6 +6,8 @@ WHITE=(255,255,255)
 BLUE=(50,50,255)
 YELLOW=(255,255,0)
 RED = (255, 50, 50)
+GOLD = (255, 215, 0)
+PURPLE = (225, 00, 225)
 
 pygame.font.init()
 myfont = pygame.font.SysFont(None, 40)
@@ -24,6 +25,33 @@ def next(i,j, dir):
         return (i, j-1)
     else: #dir == 3 down
         return (i+1, j)
+
+def permutations(L): #all permutations of a list
+    if len(L) <= 1:
+        return [L]
+    else:
+        output = []
+        repeating = [] #aldready considered l's
+        for l in L: #add all permutations ending with l
+            if l not in repeating:
+                output += [perm+[l] for perm in permutations(delete(L, l))]
+                repeating.append(l) #mark
+        return output
+
+def delete(L, deleted): #remove a one element of a value from a list
+    found = False
+    i = 0
+    output = []
+    while i<len(L) and not found:
+        if L[i] != deleted:
+            output.append(L[i])
+        else:
+            found = True
+        i+=1
+    while i<len(L):
+        output.append(L[i])
+        i+=1
+    return output
 
 class Corner():
     def __init__(self, x, y, r = -1, u = -1, l = -1, d = -1):
@@ -139,6 +167,8 @@ class Map():
         self.player_spawn = self.node_nums[0]
         self.ghost_spawn = [self.node_nums[-1], self.node_nums[-2], self.node_nums[-3]]
 
+        self.g = {} #distance between two nodes
+
     def get_next(self, corner_num, dir):
         return self.corner[corner_num].get_neighbour(dir)
 
@@ -187,9 +217,12 @@ class Map():
     def get_left(self):
         return self.left
 
-    def heuristic(self, corner1, corner2):
-        return ( abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
-        + abs(self.corner[corner1].get_y()-self.corner[corner2].get_y()) )
+    def heuristic(self, node1, node2):
+        try:
+            return self.g[node1, node2]
+        except KeyError:
+            return ( abs(self.corner[node1].get_x()-self.corner[node2].get_x())
+            + abs(self.corner[node1].get_y()-self.corner[node2].get_y()) )
 
     def route(self, start, end): #finds optimal path from start to end, BOTH start and end have to be nodes
         visited = {} 
@@ -215,6 +248,9 @@ class Map():
                         current = node
             visited[current] = True #mark the current node as visited
 
+            self.g[start, current] = g[current] #improve heuristic with known distance
+            self.g[current, start] = g[current]
+
             for dir in range(4): #look in every direction
                 next = self.corner[current].get_adjacent(dir)
                 if next != -1: #there is a neighbour
@@ -229,11 +265,37 @@ class Map():
         while current != start:
             nav.insert(0, prev_dir[current])
             current = prev_node[current] #move one node back
-
         return nav, g[end]
 
     def is_node(self, corner):
         return corner in self.node_nums
+
+    def away_from(self, node): #node far away from the given position
+        furthest = node
+        max_dist = 0
+        for node1 in self.node_nums:
+            if self.heuristic(node, node1) > max_dist:
+                max_dist = self.heuristic(node, node1)
+                furthest = node1
+        return furthest
+    
+    def escape_node(self, ghost_pos, player_pos): #finds a node such that player is far from the line joining the node and the ghost
+        gp = self.heuristic(player_pos, ghost_pos)
+
+        best_difference = 0 #find the highest |GP|+|PN|-|GN|
+        for node in self.node_nums:
+            if gp + self.heuristic(player_pos, node) - self.heuristic(ghost_pos, node) > best_difference:
+                best_difference = gp+ self.heuristic(player_pos, node) - self.heuristic(ghost_pos, node)
+
+        escape = ghost_pos
+        max_dist = 0
+        for node in self.node_nums: #find the furthest node in the right direction
+            dist = self.heuristic(player_pos, node)
+            if gp + dist - self.heuristic(ghost_pos, node) >= (7*best_difference)//10: #in the right direction
+                if dist>max_dist:
+                    max_dist = node
+                    escape = node
+        return escape
 
 class Game():
     def __init__(self, level):
@@ -241,6 +303,7 @@ class Game():
         self.lives = 3
         self.all_sprites_group = pygame.sprite.Group()
         self.ghost_group = pygame.sprite.Group()
+        self.token_group = pygame.sprite.Group()
         self.player = Player()
         self.all_sprites_group.add(self.player)
 
@@ -255,13 +318,30 @@ class Game():
         grid = map.get_grid()
         up = map.get_up()
         left = map.get_left()
+
+        zeros = [] #mark zeros on the grid
         for j in range(len(grid)):
             for i in range(len(grid[j])):
                 if grid[j][i] == 0:
-                    dot = Dot(i*h+h//2+left, j*h+h//2+up)
-                    self.dot_group.add(dot)
+                    zeros.append((j,i))
 
-        self.tracking = False
+        energizers = [] #choose positions of the energizers
+        while len(energizers)<2:
+            energizers.append(zeros[random.randint(0, len(zeros)-1)])
+
+        for (j,i) in zeros:
+            if (j,i) in energizers:
+                dot = Energizer(i*h+h//2+left, j*h+h//2+up)
+            else:
+                dot = Dot(i*h+h//2+left, j*h+h//2+up)
+            self.dot_group.add(dot)
+
+        self.tracking = True #flag determining whether to compute new routes
+        self.energized_due = 0 #time until which the energizer boost works
+        self.start_respawning_in = 0 #time of creating the next ghost (if there are any missing)
+        self.speed_boost_due = 0
+        self.confuse_boost_due = 0
+        self.next_token_in = 5000 #do not make any tokens until 5 seconds elapse
 
     def controls(self):
         for event in pygame.event.get(): #stops the game, if required
@@ -270,13 +350,13 @@ class Game():
                 done = True
         #player controls        
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_RIGHT]:
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.player.set_turn(0)
-        elif keys[pygame.K_UP]:
+        elif keys[pygame.K_UP] or keys[pygame.K_w]:
             self.player.set_turn(1)
-        elif keys[pygame.K_LEFT]:
+        elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.player.set_turn(2)
-        elif keys[pygame.K_DOWN]:
+        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
             self.player.set_turn(3)
 
     def logic(self):
@@ -287,31 +367,83 @@ class Game():
         #handle collisions with dots
         for dot in pygame.sprite.spritecollide(self.player, self.dot_group, True):
             score += 5
+            if type(dot) == Energizer:
+                self.energized_due = pygame.time.get_ticks()+4000 #activate the boost for 4 seconds
+                for ghost in self.ghost_group:
+                    ghost.set_nav([-1]) #make all ghosts turn around
+
         if len(self.dot_group) == 0: #all dots eaten
             level += 1 #next level
             nextscreen = "Game"
 
+        #handle collisions with tokens
+        for token in pygame.sprite.spritecollide(self.player, self.token_group, True):
+            if type(token) == SpeedToken:
+                self.player.set_default_speed(4)
+                self.speed_boost_due = pygame.time.get_ticks()+7500 #activate the boost for 7.5 seconds
+            elif type(token) == ConfuseToken:
+                for ghost in self.ghost_group:
+                    ghost.set_nav([-1]) 
+                self.confuse_boost_due = pygame.time.get_ticks()+7500 #confuse ghosts for 7.5 seconds
+
         #handle collisions with ghosts
         if len(pygame.sprite.spritecollide(self.player, self.ghost_group, False)) != 0:
-            self.lives += -1
-            if self.lives <= 0:
-                nextscreen = "GameOverScreen"
-            pygame.time.wait(200) #wait 0.2 seconds
-            #reset sprites
-            self.all_sprites_group = pygame.sprite.Group()
-            self.ghost_group = pygame.sprite.Group()
-            self.player = Player()
-            self.all_sprites_group.add(self.player)
-            for spawn in map.get_ghost_spawn():
-                ghost = Ghost(spawn)
+            if pygame.time.get_ticks()<=self.energized_due: #boosted
+                self.start_respawning_in = pygame.time.get_ticks() + 5000 #start respawning ghosts in 5 seconds
+                for ghost in pygame.sprite.spritecollide(self.player, self.ghost_group, True):
+                    score += 200                
+            else:
+                self.lives += -1
+                if self.lives <= 0:
+                    nextscreen = "GameOverScreen"
+                pygame.time.wait(200) #wait 0.2 seconds
+                #reset sprites
+                self.all_sprites_group = pygame.sprite.Group()
+                self.ghost_group = pygame.sprite.Group()
+                self.player = Player()
+                self.all_sprites_group.add(self.player)
+                for spawn in map.get_ghost_spawn():
+                    ghost = Ghost(spawn)
+                    self.all_sprites_group.add(ghost)
+                    self.ghost_group.add(ghost)
+
+                self.tracking = True #enable tracking
+                self.speed_boost_due = 0 #cancel boosts
+                self.confuse_boost_due = 0
+
+        t = pygame.time.get_ticks() #check time effects
+
+        if t > self.start_respawning_in: #make new ghost, if necessary
+            if len(self.ghost_group) < 3:
+                ghost = Ghost(map.away_from(self.player.get_corner()))
                 self.all_sprites_group.add(ghost)
                 self.ghost_group.add(ghost)
+                if len(self.ghost_group) < 3: #note to make another
+                    self.start_respawning_in += 5000
         
-        if self.player.is_at_node():
-            if self.tracking:
-                self.navigate_ghosts()
+        if t > self.next_token_in: #try to make new tokens
+            self.next_token_in = t + 15000 #retry in 15 seconds
+            if random.randint(0,1) == 0: #only make tokens once every 2 trials
+                
+                if random.randint(0,1)==0: #in 50% of cases, make a speed token
+                    token = SpeedToken(map.away_from(self.player.get_corner()))
+                else: #in other cases, make a confuse token
+                    token = ConfuseToken(map.away_from(self.player.get_corner()))
+
+                self.token_group.add(token) #it is not in the all_sprites_group because it does not need updating
+
+        if self.player.is_at_node(): #direct ghosts
+            if self.tracking and t>self.confuse_boost_due: #if no routes have been computed so far and the confuse boost is uncative
+                if t<=self.energized_due: #run away from the boosted player
+                    self.escape_player()
+                else:
+                    self.navigate_ghosts() #chase the player
+                self.tracking = False #disable tracking
         else:
-            self.tracking = True
+            self.tracking = True #enable tracking
+
+        if t>self.speed_boost_due: #set player's speed to normal, if their speed boost has expired
+            self.player.set_default_speed(3)
 
         self.all_sprites_group.update()
         self.update_screen()
@@ -320,6 +452,7 @@ class Game():
         screen.fill(BLACK)
         map.draw()
         self.dot_group.draw(screen)
+        self.token_group.draw(screen)
         self.all_sprites_group.draw(screen)
         self.scoreboard()
         pygame.display.flip()
@@ -328,18 +461,87 @@ class Game():
         screen.blit(myfont.render("Level "+str(self.level), 1, YELLOW), (200, 5))
         screen.blit(myfont.render("Score: "+str(score), 1, WHITE), (430, 5))
         screen.blit(myfont.render("Lives: "+str(self.lives), 1, WHITE), (700, 5))
+        if pygame.time.get_ticks()<=self.energized_due: #boosted
+            if self.energized_due-pygame.time.get_ticks() < 1000: #less than a second left
+                screen.blit(myfont.render("BOOSTED", 1, (100, 0, 0)), (835, 5)) #RED but darker
+            else:
+                screen.blit(myfont.render("BOOSTED", 1, RED), (835, 5))
+
+    def estimate_dist(self, ghost_num, node): #estimate the distance from the ghost to the given node
+            count = 0
+            for ghost in self.ghost_group:
+                if count == ghost_num:
+                    dist1 = ghost.get_node_d() + map.heuristic(node, ghost.get_node()) #dist if turning around
+                    dist2 = map.get_dist(ghost.get_node(), ghost.get_node_dir()) - ghost.get_node_d()
+                    + map.heuristic(node, map.get_adjacent(ghost.get_node(), ghost.get_node_dir())) #dist if going straight
+                    if (3*dist1)//2 < dist2:
+                        dist2 = dist1
+                count+=1
+            return dist2 #return the smaller of dist1 and dist2
 
     def navigate_ghosts(self):
         global map
         player_pos = self.player.get_corner()
         ahead = map.get_adjacent(player_pos, self.player.get_dir()) #node in front of the player
         back_dir = map.dir_back(player_pos, self.player.get_dir()) #direction from ahead to player_pos
-        ends = [player_pos]+2*[ahead] #target nodes
-        end_dir = [self.player.get_dir()]  +2*[back_dir] #direction from target nodes
-        count = 0
 
+        #classify all possible destination nodes and further directions to the player
+        end_dir = {} #path from a node to the player
+        end_dir[player_pos] = [self.player.get_dir()]
+        end_dir[ahead] = [back_dir]
+        target = [] #nodes behind the node ahead
+        for dir in range(4):
+            if dir != back_dir:
+                if map.get_adjacent(ahead, dir) != -1:
+                    target.append(map.get_adjacent(ahead, dir))
+                    end_dir[map.get_adjacent(ahead, dir)] = [map.dir_back(ahead, dir), back_dir] #directions from that node to the player
+
+        dist = {} #estimate distances from each ghost to each (potential) destination node
+        ghost_num = 0
+        for ghost_num in range(len(self.ghost_group)):
+            for node in target+[ahead, player_pos]:
+                dist[ghost_num, node] = self.estimate_dist(ghost_num, node)
+
+        if len(self.ghost_group) == 3:
+            trapping_sets = [[player_pos, ahead, ahead], [player_pos, player_pos, ahead], 3*[player_pos]] #basic strategies
+            if len(target) == 2: #possible to spread ghosts, add more strategies
+                trapping_sets.append([player_pos]+target)
+                for node in target:
+                    trapping_sets.append([player_pos, ahead, node])
+        elif len(self.ghost_group) == 2:
+            trapping_sets = [[player_pos, ahead], [player_pos, player_pos]]
+        elif len(self.ghost_group) == 1:
+            trapping_sets = [[player_pos]]
+        else:
+            trapping_sets = []
+
+
+        perms = [] #all trapping assignments
+        for set in trapping_sets:
+            perms+=permutations(set)
+
+        end_node = [] #choose a permutation which minimizes the time left for player to escape
+        shortest_time = None #infinite
+        for perm in perms:
+            time_left = None #minus infinity
+            for ghost_num in range(len(self.ghost_group)):
+                time = dist[ghost_num, perm[ghost_num]]//2-map.heuristic(player_pos, perm[ghost_num])//3
+                if time_left==None:
+                    time_left = time #maximum
+                elif time<time_left:
+                    time_left = time #maximum
+
+            if shortest_time == None:
+                end_node = perm
+                shortest_time = time_left #minimum
+            elif time_left<shortest_time:
+                end_node = perm
+                shortest_time = time_left #minimum
+
+        #compute the routes
+        ghost_num = 0
         for ghost in self.ghost_group:
-            end = ends[count]
+            end = end_node[ghost_num]
             start1 = ghost.get_node() #node behind
             start2 = map.get_adjacent(start1, ghost.get_node_dir()) #node ahead
             route1, dist1 = map.route(start1, end) #compute the route if turning around
@@ -348,22 +550,23 @@ class Game():
             #account for the distances to the starting nodes
             dist1 += ghost.get_node_d()
             dist2 += map.get_dist(ghost.get_node(), ghost.get_node_dir()) - ghost.get_node_d()
-            route1.append((ghost.get_dir()+2)%4) #you'll need to turn around to get to the node behind
-            
-            if dist1<dist2: #it is better to turn around
+
+            if (3*dist1)//2<dist2: #it is better to turn around (fovourizes going ahead)
                 route1.insert(0, -1) #-1 tells the ghost to turn around
                 nav = route1
             else:
                 nav = route2
 
-            nav = route2
-            
-            nav.append(end_dir[count]) #get into where the player is after reaching your destination
+            nav = nav + end_dir[end_node[ghost_num]] #add directions from target to player
 
             ghost.set_nav(nav)
-            count += 1
+            ghost_num += 1
 
-        self.tracking_ghosts = False #disable tracking
+    def escape_player(self):
+        for ghost in self.ghost_group:
+            ghost_pos = map.get_adjacent(ghost.get_node(), ghost.get_node_dir()) #node ahead of the ghost
+            route, dist = map.route( ghost_pos, map.escape_node( ghost.get_node(), self.player.get_corner() ) )
+            ghost.set_nav(route)
 
 class Player(pygame.sprite.Sprite):
     def __init__(self):
@@ -446,6 +649,11 @@ class Player(pygame.sprite.Sprite):
         else:
             return False
 
+    def set_default_speed(self, s):
+        self.default_speed = s
+        if self.speed != 0: #if they are moving...
+            self.speed = s #...change their speed straight away
+
 class Ghost(pygame.sprite.Sprite):
     def __init__(self, spawn):
         super().__init__()
@@ -492,13 +700,15 @@ class Ghost(pygame.sprite.Sprite):
             #assume the corner's position
             self.rect.x = map.get_corner(self.corner).get_x()
             self.rect.y = map.get_corner(self.corner).get_y()
-            
+
             #decide dir
             dir0 = (self.dir+2)%4 #the direction the ghost came from
+
             if map.is_node(self.corner) and self.nav != []: #at a node and given directions
                 self.dir = self.nav.pop(0) #remove the first turn from the list and go there
                 if map.get_next(self.corner, self.dir) == -1:
                     print("Wrong directions") #for the purposes of testing only
+
             else: #at a corner or no directions given
                 self.dir = random.randint(0,3) #face a random direction
                 count = 0 #check for directions different than the one you came from
@@ -514,19 +724,62 @@ class Ghost(pygame.sprite.Sprite):
                 self.node_d = 0
                 self.node_dir = self.dir
             self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
+                
+    def decide_dir(self): #decide where to go when at a corner
+
+        dir0 = (self.dir+2)%4 #the direction the ghost came from
+
+        if map.is_node(self.corner) and self.nav != []: #at a node and given directions
+            self.dir = self.nav.pop(0) #remove the first turn from the list and go there
+            if map.get_next(self.corner, self.dir) == -1:
+                print("Wrong directions in decide dir") #for the purposes of testing only
+
+        else: #at a corner or no directions given
+            self.dir = random.randint(0,3) #face a random direction
+            count = 0 #check for directions different than the one you came from
+            while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
+                self.dir = (self.dir+1)%4 #turn left
+                count += 1
+            if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
+                self.dir = dir0
+
+        #once dir is decided, compute node parameters and dist
+        if map.is_node(self.corner): #update position with respect to the node structures
+            self.node = self.corner
+            self.node_d = 0
+            self.node_dir = self.dir
+        self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
     def set_nav(self, nav):
         self.nav = nav
-        if nav[0] == -1: #turn around
-            #update node coordinates
-            self.node = map.get_adjacent(self.node, self.node_dir)
-            self.node_dir = map.dir_back(self.corner, self.dir)
-            self.node_d = map.get_dist(self.node, self.node_dir)-self.node_d
+        if len(nav) != 0:
+            if nav[0] == -1: #turn around
+                self.nav.pop(0)
+                #update node coordinates
+                if self.d == 0: #at a corner
+                    if map.is_node(self.corner) and self.nav != []: #at a node and given directions
+                        self.dir = self.nav.pop(0) #remove the first turn from the list and go there
+                        if map.get_next(self.corner, self.dir) == -1:
+                            print("Wrong directions when turning around at a node") #for the purposes of testing only
+                    else: #at a corner or no directions, go anywhere
+                        self.dir = (self.dir+1)%4
+                        while map.get_next(self.corner, self.dir) == -1:
+                            self.dir = (self.dir+1)%4
+                    #once dir is decided, compute node parameters and dist
+                    if map.is_node(self.corner): #update position with respect to the node structures
+                        self.node = self.corner
+                        self.node_d = 0
+                        self.node_dir = self.dir
+                    self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
-            self.d = self.dist - self.d #change d to the distance from the next corner
-            self.corner = map.get_next(self.corner, self.dir) #change corner to next corner
-            self.dir = (self.dir+2)%4
-
+                else:
+                    self.node_d = map.get_dist(self.node, self.node_dir)-self.node_d
+                    self.node = map.get_adjacent(self.node, self.node_dir)
+                    self.node_dir = map.dir_back(self.corner, self.dir)
+                    
+                    self.d = self.dist - self.d #change d to the distance from the next corner
+                    self.corner = map.get_next(self.corner, self.dir) #change corner to next corner
+                    self.dir = (self.dir+2)%4
 
     def get_node(self):
         return self.node
@@ -539,13 +792,34 @@ class Ghost(pygame.sprite.Sprite):
 
     def get_dir(self):
         return self.dir
-        
+
 class Dot(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
         self.image = pygame.Surface([h//5,h//5])
         self.image.fill(WHITE)
         self.rect = self.image.get_rect(center = (x, y))
+
+class Energizer(Dot):
+    def __init__(self, x, y):
+        super().__init__(x,y)
+        self.image = pygame.Surface([(2*h)//5,(2*h)//5])
+        self.image.fill(WHITE)
+        self.rect = self.image.get_rect(center = (x, y))
+
+class SpeedToken(pygame.sprite.Sprite):
+    def __init__(self, corner) -> None:
+        super().__init__()
+        self.image = pygame.Surface([(2*h)//3,(2*h)//3])
+        self.image.fill(GOLD) 
+        self.rect = self.image.get_rect(center = (map.get_corner(corner).get_x()+h//2, map.get_corner(corner).get_y()+h//2))
+
+class ConfuseToken(pygame.sprite.Sprite):
+    def __init__(self, corner) -> None:
+        super().__init__()
+        self.image = pygame.Surface([(2*h)//3,(2*h)//3])
+        self.image.fill(PURPLE) 
+        self.rect = self.image.get_rect(center = (map.get_corner(corner).get_x()+h//2, map.get_corner(corner).get_y()+h//2))
 
 class WelcomeMenu():
     def __init__(self):
@@ -565,11 +839,11 @@ class WelcomeMenu():
 
         #player controls        
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_UP]:
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
             if self.scroll:
                 self.current = (self.current-1)%len(self.options) #change the option to the previous one
                 self.scroll = False #disable scrolling until the user lets go off the key
-        elif keys[pygame.K_DOWN]:
+        elif keys[pygame.K_DOWN] or keys[pygame.K_s]:
             if self.scroll:
                 self.current = (self.current+1)%len(self.options)
                 self.scroll = False
@@ -723,9 +997,28 @@ grid7 = [
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
+grid8 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
 
 h = 40 #tile width
-map = Map(grid7, h)
+map = Map(grid8, h)
 score = 0
 level = 1
 nextscreen = "N" #do not change screens
