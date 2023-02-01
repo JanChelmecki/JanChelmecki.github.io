@@ -341,7 +341,7 @@ class Game():
         self.start_respawning_in = 0 #time of creating the next ghost (if there are any missing)
         self.speed_boost_due = 0
         self.confuse_boost_due = 0
-        self.next_token_in = 5000 #do not make any tokens until 5 seconds elapse
+        self.next_token_in = 5000 #do not make any tokens until 5 seconds into the game
 
     def controls(self):
         for event in pygame.event.get(): #stops the game, if required
@@ -422,7 +422,7 @@ class Game():
                     self.start_respawning_in += 5000
         
         if t > self.next_token_in: #try to make new tokens
-            self.next_token_in = t + 15000 #retry in 15 seconds
+            self.next_token_in = t + 15000  #retry in 15 seconds
             if random.randint(0,1) == 0: #only make tokens once every 2 trials
                 
                 if random.randint(0,1)==0: #in 50% of cases, make a speed token
@@ -1016,9 +1016,28 @@ grid8 = [
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
+grid9 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 
+]
 h = 40 #tile width
-map = Map(grid8, h)
+map = Map(grid9, h)
 score = 0
 level = 1
 nextscreen = "N" #do not change screens
