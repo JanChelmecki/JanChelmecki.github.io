@@ -98,6 +98,7 @@ class Map():
         self.h = h
         #initialize corners
         self.corner = []
+        self.tunnel_corners = []
 
         #find all the corners
         corner_pos = [] #mark corners 'on the grid', list where n'th item is the corner's grid coordinates
@@ -106,14 +107,15 @@ class Map():
             for j in range(1, len(grid[i])-1):
                 if grid[i][j] == 0: #not a wall
                     vert = 0 #count vertical neighbours
-                    if grid[i+1][j]==0:
+                    if grid[i+1][j]!=1:
                         vert += 1
-                    if grid[i-1][j]==0:
+                    if grid[i-1][j]!=1:
                         vert += 1
+
                     hor = 0 #count horizontal neighbours
-                    if grid[i][j+1]==0:
+                    if grid[i][j+1]!=1:
                         hor += 1
-                    if grid[i][j-1]==0:
+                    if grid[i][j-1]!=1:
                         hor += 1
 
                     if hor*vert != 0 or hor+vert == 1: #junction/branch/turn or dead end
@@ -122,15 +124,21 @@ class Map():
                         else:
                             new = Node(j*h+self.left, i*h+self.up)
                             self.node_nums.append(len(self.corner)) #mark the corner as a node
+
+                        if grid[i][j+1] == 2 or grid[i][j-1] == 2:
+                            self.tunnel_corners.append(len(self.corner))
+
                         self.corner.append(new)
-                        corner_pos.append((i,j)) #mark its position 'on the grid'
-        
+                        corner_pos.append((i,j)) #mark its position 'on the grid'              
+
+
         #connect the corners
         for current in range(len(self.corner)):
             for dir in range(4): #check in all four directions
                 if self.corner[current].get_neighbour(dir) == -1: #no known neighbour in the dir direction
                     (i, j) = corner_pos[current]
                     (k, l) = next(i, j, dir)
+
                     if grid[k][l] == 0: #there is a neighbour in the dir direction
                         while not (k,l) in corner_pos: #explore in the dir direction until reaching a corner
                             (k,l) = next(k, l, dir)
@@ -138,12 +146,16 @@ class Map():
                         self.corner[current].set_neighbour(dir, found) #connect current to found
                         self.corner[found].set_neighbour((dir+2)%4, current) #connect found to current
 
+                    elif grid[k][l] == 2: #a tunnel of the screen
+                        found = corner_pos.index((i, len(grid[0])-j-1)) #corner on the same height but on other edge
+                        self.corner[current].set_neighbour(dir, found) #connect current to found
+                        self.corner[found].set_neighbour((dir+2)%4, current) #connect found to current
+                        
         #connect the nodes
         for node in self.node_nums:
             for dir in range(4): #look in each direction
                 if self.corner[node].get_neighbour(dir) != -1: #there is a neighbour
                     if self.corner[node].get_adjacent(dir) == -1: #adjacent unknown
-                        #print("starting at", node, "exploring in dir = ", dir)
                         dist = 0 #distance from node
                         current = node
                         dir0 = dir #direction of search (might change on turns)
@@ -192,8 +204,11 @@ class Map():
 
     def dist(self, corner1, corner2, dir): #works only for connected corners, dir is the direction of the connection
         if dir%2 == 0: #dir is horizontal
-            return abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
-        else:
+            if corner1 in self.tunnel_corners and self.get_next(corner1, dir) in self.tunnel_corners: # a tunnel
+                return size[0]-abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())+h
+            else:
+                return abs(self.corner[corner1].get_x()-self.corner[corner2].get_x())
+        else: #dir is vertical
             return abs(self.corner[corner1].get_y()-self.corner[corner2].get_y())
 
     def draw(self):
@@ -201,6 +216,19 @@ class Map():
             for j in range(len(self.grid[i])):
                 if self.grid[i][j] == 1:
                     pygame.draw.rect(screen,BLUE,(j*self.h+self.left, i*self.h+self.up, self.h, self.h))
+        #draw tunnels
+        for i in range(len(self.grid)):
+            if self.grid[i][0] == 2:
+                x = self.left-h #go left until the edge
+                while x>-h:
+                    pygame.draw.rect(screen,BLUE,(x, i*self.h+self.up-h, self.h, self.h))#block above
+                    pygame.draw.rect(screen,BLUE,(x, i*self.h+self.up+h, self.h, self.h))#block below
+                    x = x-h
+                x = self.left + h*len(self.grid[0]) #go right until the edge
+                while x<size[0]:
+                    pygame.draw.rect(screen,BLUE,(x, i*self.h+self.up-h, self.h, self.h))#block above
+                    pygame.draw.rect(screen,BLUE,(x, i*self.h+self.up+h, self.h, self.h))#block below
+                    x+=h
 
     def get_player_spawn(self):
         return self.player_spawn
@@ -323,18 +351,33 @@ class Game():
         for j in range(len(grid)):
             for i in range(len(grid[j])):
                 if grid[j][i] == 0:
-                    zeros.append((j,i))
+                    zeros.append((i*h+h//2+left, j*h+h//2+up))
+        for j in range(len(grid)): #tunels towards the left edge
+            if grid[j][0] == 2:
+                x = left+h//2
+                y = j*h+h//2+up
+                while x > 0:
+                    zeros.append((x,y))
+                    x = x-h
+        for j in range(len(grid)): #tunels towards the right edge
+            if grid[j][len(grid[j])-1] == 2:
+                x = (len(grid[j])-1)*h+left+h//2
+                y = j*h+h//2+up
+                while x < size[0]:
+                    zeros.append((x,y))
+                    x = x+h
 
         energizers = [] #choose positions of the energizers
         while len(energizers)<2:
             energizers.append(zeros[random.randint(0, len(zeros)-1)])
 
-        for (j,i) in zeros:
-            if (j,i) in energizers:
-                dot = Energizer(i*h+h//2+left, j*h+h//2+up)
+        for (x,y) in zeros:
+            if (x,y) in energizers:
+                dot = Energizer(x, y)
             else:
-                dot = Dot(i*h+h//2+left, j*h+h//2+up)
+                dot = Dot(x, y)
             self.dot_group.add(dot)
+        
 
         self.tracking = True #flag determining whether to compute new routes
         self.energized_due = 0 #time until which the energizer boost works
@@ -602,6 +645,12 @@ class Player(pygame.sprite.Sprite):
         elif self.dir == 3:
             self.rect.y += self.speed
 
+        #check if beyond the screen edge (when going through a tunnel)
+        if self.rect.x < -h:
+            self.rect.x = size[0]
+        elif self.rect.x>size[0]:
+            self.rect.x = -h
+
         if abs(self.turn - self.dir) == 2: #turn is opposite to dir, the player turns around
             self.d = self.dist - self.d #change d to the distance from the next node
             self.corner = map.get_next(self.corner, self.dir) #change corner to next corner
@@ -693,6 +742,12 @@ class Ghost(pygame.sprite.Sprite):
         elif self.dir == 3:
             self.rect.y += self.speed
 
+        #check if beyond the screen edge (when going through a tunnel)
+        if self.rect.x < -h:
+            self.rect.x = size[0]
+        elif self.rect.x>size[0]:
+            self.rect.x = -h
+
         if self.d >= self.dist: #reached the next corner
             self.d = 0
             self.corner = map.get_next(self.corner, self.dir) #switch to the next corner
@@ -724,31 +779,6 @@ class Ghost(pygame.sprite.Sprite):
                 self.node_d = 0
                 self.node_dir = self.dir
             self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
-                
-    def decide_dir(self): #decide where to go when at a corner
-
-        dir0 = (self.dir+2)%4 #the direction the ghost came from
-
-        if map.is_node(self.corner) and self.nav != []: #at a node and given directions
-            self.dir = self.nav.pop(0) #remove the first turn from the list and go there
-            if map.get_next(self.corner, self.dir) == -1:
-                print("Wrong directions in decide dir") #for the purposes of testing only
-
-        else: #at a corner or no directions given
-            self.dir = random.randint(0,3) #face a random direction
-            count = 0 #check for directions different than the one you came from
-            while (map.get_next(self.corner, self.dir) == -1 or self.dir == dir0) and count < 4:
-                self.dir = (self.dir+1)%4 #turn left
-                count += 1
-            if count == 4: #checked all directions and it's only possible to go backwards (at dead end)
-                self.dir = dir0
-
-        #once dir is decided, compute node parameters and dist
-        if map.is_node(self.corner): #update position with respect to the node structures
-            self.node = self.corner
-            self.node_d = 0
-            self.node_dir = self.dir
-        self.dist = map.dist(self.corner, map.get_next(self.corner, self.dir), self.dir)
 
     def set_nav(self, nav):
         self.nav = nav
@@ -1000,6 +1030,29 @@ grid7 = [
 grid8 = [
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[2, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 2],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+[2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+
+
+
+
+test_map_1 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 [1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
 [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
 [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
@@ -1016,7 +1069,7 @@ grid8 = [
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ]
-grid9 = [
+test_map_2 = [
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
 [1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
@@ -1034,10 +1087,30 @@ grid9 = [
 [1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-
 ]
+test_map_3 = [
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+[1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2],
+[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
+[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+[2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 2],
+[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
+[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+
+
 h = 40 #tile width
-map = Map(grid9, h)
+map = Map(test_map_3, h)
 score = 0
 level = 1
 nextscreen = "N" #do not change screens
