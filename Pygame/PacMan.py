@@ -53,6 +53,100 @@ def delete(L, deleted): #remove a one element of a value from a list
         i+=1
     return output
 
+def random_grid():
+    N = 8
+    grid = [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    ] #this is a bit baroque but Python does not like L = k*[k*[...]] (bug in item assignments)
+    unvisited = [(2*i, 2*j) for i in range(1, N) for j in range(1, N)] #mark all pegs as unvisited
+    leafs = [] #the leaf queue
+    roots = [] #the queue of correspondent roots
+    tree_size = {}
+    max_size = {} #dictionary root:maximum size of the tree
+
+    while len(leafs)<10: #pick roots at random
+        i = 2*random.randint(1,N-1)
+        j = 2*random.randint(1,N-1)
+        if (i,j) not in leafs:
+            leafs.append( (i,j) ) #make it a leaf
+            unvisited.remove((i,j)) #mark it as visited
+
+            roots.append( (i,j) ) #make the leaf its own root
+            tree_size[(i,j)] = 1
+            max_size[(i,j)] = random.randint(3,5) #decide on the maximal size of the tree
+
+    while unvisited != []:
+        if len(leafs)<=1: #make new roots
+            root = unvisited.pop( random.randint(0,len(unvisited)-1) )
+            tree_size[root] = 1
+            max_size[root] = 6 #decide on the maximal size of the tree
+            (i,j) = root
+        else:
+            (i,j) = leafs.pop(0) #take the first leaf
+            root = roots.pop(0) #its root
+
+        for trial in range(4):
+            #choose the direction of expansion
+            if (i,j) == root: #root of the tree, choose any direction
+                dir = random.randint(0,3)
+            else:
+                dir = 1 #direction of the wall
+                (k,l) = next(i, j, dir)
+                while grid[k][l] == 0:
+                    dir = (dir+1)%4
+                    (k,l) = next(i, j, dir)
+                x = random.randint(0,6)
+                if x == 0:
+                    dir = (dir+2)%4 #straight ahead
+                elif x <= 4:
+                    dir = (dir+3)%4 #one side
+                else:
+                    dir = (dir+1)%4 #other side
+                
+                
+            (k,l) = next(i, j, dir) #middle
+            new = next(k, l, dir) #next peg
+
+            if new in unvisited and new[0] != 0 and new[0] != 2*N and new[1] != 0 and new[1] != 2*N and tree_size[root]<max_size[root]:
+                tree_size[root] += 1
+                grid[k][l] = 1
+                unvisited.remove(new) #visit new
+                leafs.append(new) #make it a leaf
+                roots.append(root) #mark what tree it's coming from
+                    
+    tunnel_heights = []
+    while len(tunnel_heights)<random.randint(1,2): #add new element
+        valid = False #whether it's away from other tunnels
+        while not valid:
+            h = 2*random.randint(1,N-2)+1 #pick new at random
+            valid = True #assume it's valid
+            for height in tunnel_heights:
+                if abs(height-h)<3:
+                    valid = False
+        tunnel_heights.append(h)
+
+    for h in tunnel_heights:
+        grid[h][0] = 2
+        grid[h][2*N] = 2
+                
+    return grid
+
 class Corner():
     def __init__(self, x, y, r = -1, u = -1, l = -1, d = -1):
         self.x = x
@@ -328,7 +422,6 @@ class Map():
 class Game():
     def __init__(self, level):
         self.level = level
-        self.lives = 3
         self.all_sprites_group = pygame.sprite.Group()
         self.ghost_group = pygame.sprite.Group()
         self.token_group = pygame.sprite.Group()
@@ -386,6 +479,12 @@ class Game():
         self.confuse_boost_due = 0
         self.next_token_in = 5000 #do not make any tokens until 5 seconds into the game
 
+        #level difficulty variation
+        self.energizer_duration = 4000+1000*max(4-level, 0) #7s, 6s, 5s, 4s, 4s, 4s, etc.
+        self.token_waiting_time = 8000+2000*level #10s, 12s, 14s, 16s, etc.
+        self.boost_duration = 6000+1000*max(3-level,0) #8s, 7s, 6s, 6s, etc.
+
+
     def controls(self):
         for event in pygame.event.get(): #stops the game, if required
             if event.type==pygame.QUIT:
@@ -403,7 +502,7 @@ class Game():
             self.player.set_turn(3)
 
     def logic(self):
-        global score, nextscreen, level
+        global score, nextscreen, level, lives
 
         self.controls()
 
@@ -411,7 +510,7 @@ class Game():
         for dot in pygame.sprite.spritecollide(self.player, self.dot_group, True):
             score += 5
             if type(dot) == Energizer:
-                self.energized_due = pygame.time.get_ticks()+4000 #activate the boost for 4 seconds
+                self.energized_due = pygame.time.get_ticks()+self.energizer_duration #activate the boost
                 for ghost in self.ghost_group:
                     ghost.set_nav([-1]) #make all ghosts turn around
 
@@ -436,8 +535,8 @@ class Game():
                 for ghost in pygame.sprite.spritecollide(self.player, self.ghost_group, True):
                     score += 200                
             else:
-                self.lives += -1
-                if self.lives <= 0:
+                lives += -1
+                if lives <= 0:
                     nextscreen = "GameOverScreen"
                 pygame.time.wait(200) #wait 0.2 seconds
                 #reset sprites
@@ -465,7 +564,7 @@ class Game():
                     self.start_respawning_in += 5000
         
         if t > self.next_token_in: #try to make new tokens
-            self.next_token_in = t + 15000  #retry in 15 seconds
+            self.next_token_in = t + self.token_waiting_time  #retry later
             if random.randint(0,1) == 0: #only make tokens once every 2 trials
                 
                 if random.randint(0,1)==0: #in 50% of cases, make a speed token
@@ -503,7 +602,7 @@ class Game():
     def scoreboard(self):
         screen.blit(myfont.render("Level "+str(self.level), 1, YELLOW), (200, 5))
         screen.blit(myfont.render("Score: "+str(score), 1, WHITE), (430, 5))
-        screen.blit(myfont.render("Lives: "+str(self.lives), 1, WHITE), (700, 5))
+        screen.blit(myfont.render("Lives: "+str(lives), 1, WHITE), (700, 5))
         if pygame.time.get_ticks()<=self.energized_due: #boosted
             if self.energized_due-pygame.time.get_ticks() < 1000: #less than a second left
                 screen.blit(myfont.render("BOOSTED", 1, (100, 0, 0)), (835, 5)) #RED but darker
@@ -546,7 +645,7 @@ class Game():
                 dist[ghost_num, node] = self.estimate_dist(ghost_num, node)
 
         if len(self.ghost_group) == 3:
-            trapping_sets = [[player_pos, ahead, ahead], [player_pos, player_pos, ahead], 3*[player_pos]] #basic strategies
+            trapping_sets = [3*[player_pos], [player_pos, player_pos, ahead], [player_pos, ahead, ahead]] #basic strategies
             if len(target) == 2: #possible to spread ghosts, add more strategies
                 trapping_sets.append([player_pos]+target)
                 for node in target:
@@ -856,9 +955,10 @@ class WelcomeMenu():
         self.options = ["START", "QUIT"]
         self.current = 0
         self.scroll = True #a flag indicating whether it is currently possible to change between options
-        global level, score
+        global level, score, lives
         level = 1 #reset game parameters
         score = 0
+        lives = 3
 
     def logic(self):
         global done, nextscreen
@@ -927,192 +1027,10 @@ pygame.init()
 size = (1000,750)
 screen = pygame.display.set_mode(size)
 
-#load map
-grid1 = [
-[1, 1, 1, 1, 1, 1, 1],
-[1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1]
-]
-grid2 = [
-[1, 1, 1, 1, 1, 1, 1],
-[1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1],
-]
-grid3 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-grid4 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-grid5 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-grid6 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1],
-[1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-grid7 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-grid8 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[2, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 2],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-
-
-
-
-test_map_1 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-test_map_2 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-test_map_3 = [
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-[1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[2, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2],
-[1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1],
-[1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],
-[1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
-[1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
-[2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 2],
-[1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],
-[1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-]
-
-
 h = 40 #tile width
-map = Map(test_map_3, h)
 score = 0
 level = 1
+lives = 3
 nextscreen = "N" #do not change screens
 
 #title of new window
@@ -1130,6 +1048,7 @@ while not done:
     clock.tick(60)
     if nextscreen != "N": #change screens
         if nextscreen == "Game":
+            map = Map(random_grid(), h)
             g = Game(level)
         elif nextscreen == "WelcomeMenu":
             g = WelcomeMenu()
